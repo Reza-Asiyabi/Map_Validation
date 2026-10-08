@@ -60,7 +60,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 # Attributes for the pair grid. Matches script 03's default (4-attribute pair
 # plot). If you want to include WoodDensity, change this to a 5-item list.
-ATTRS_ORDER = ["AGB", "Height", "Cover", "Stem"]
+ATTRS_ORDER = ["AGBD", "Height", "Cover", "Stem"]
 
 # Density-scatter memory cap. Pooled data from 10 sites can be very large;
 # subsample only if it exceeds this. Density colouring still gives faithful

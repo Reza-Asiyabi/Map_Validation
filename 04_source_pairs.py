@@ -6,7 +6,7 @@ across {PG-CBM, StruMPL, external maps, reference if any}. This is the
 attribute-centric counterpart of script 03:
     Height: PG-CBM, StruMPL, Lang, GEDI_RH98(*)
     Cover:  PG-CBM, StruMPL, Hansen, GEDI_Cover(*)
-    AGB:    PG-CBM, StruMPL, CCI, GEDI_L4B
+    AGBD:    PG-CBM, StruMPL, CCI, GEDI_L4B
     Stem:   PG-CBM, StruMPL  (no externals)
 
 (*) When a GEDI reference exists, we restrict pixels to the GEDI mask so

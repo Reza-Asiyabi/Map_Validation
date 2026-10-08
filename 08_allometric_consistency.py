@@ -3,15 +3,15 @@
 
 A model that's internally consistent should reproduce the well-known
 allometric couplings between forest attributes:
-    AGB grows monotonically with Height
-    AGB grows monotonically with Cover
-    AGB grows (more weakly) with Stem density
-    Height × Cover × Stem jointly explain most of AGB variability
+    AGBD grows monotonically with Height
+    AGBD grows monotonically with Cover
+    AGBD grows (more weakly) with Stem density
+    Height × Cover × Stem jointly explain most of AGBD variability
 
 For each model, we:
-  1. Bin AGB by a predictor (Height / Cover / Stem) and report the response
+  1. Bin AGBD by a predictor (Height / Cover / Stem) and report the response
      curve.  A flat or decreasing curve is a red flag.
-  2. Fit an OLS  AGB ~ a*H + b*C + c*S + d  per site, report R^2 and
+  2. Fit an OLS  AGBD ~ a*H + b*C + c*S + d  per site, report R^2 and
      coefficient signs.  Coefficients should be positive.
   3. Compare PG-CBM vs StruMPL allometric curves on the same axes.
 
@@ -24,15 +24,15 @@ each predictor is standardised using its mean and SD computed over ALL
 joint-valid pixels across ALL sites (one global pass), then per-site OLS
 is fitted in these units. The reported coefficients then read as "one
 standard deviation of that predictor across the whole study region
-translates into this many Mg/ha of AGB". Because the standardisation is
+translates into this many Mg/ha of AGBD". Because the standardisation is
 global, coefficients are directly comparable BOTH between predictors at a
 given site AND between sites. R^2 is unchanged by this rescaling.
 
 For a physically-interpretable complement, we also report per-site "range
 contributions": for each predictor and each site, the coefficient
 multiplied by that predictor's SD across the WHOLE study region gives the
-change in AGB associated with the natural range of that predictor at that
-site — how much AGB the predictor accounts for at each site in physical
+change in AGBD associated with the natural range of that predictor at that
+site — how much AGBD the predictor accounts for at each site in physical
 Mg/ha units.
 
 Outputs (under OUTPUT_DIR/08_allometric/):
@@ -85,7 +85,7 @@ def _binned_curve(x, y, edges, min_n=30):
     return np.array(keep_centres), np.array(means), np.array(sds)
 
 
-def _ols_fit_standardised(H, C, S, AGB,
+def _ols_fit_standardised(H, C, S, AGBD,
                            g_means: dict, g_sds: dict):
     """OLS on GLOBALLY z-scored predictors. Returns (coeffs, R^2, obs_ranges)
     where coeffs are the standardised beta coefficients and obs_ranges is a
@@ -99,7 +99,7 @@ def _ols_fit_standardised(H, C, S, AGB,
 
     A returned coef of, say, 15.0 for Height means: "a 1-SD change in Height
     (as measured across the whole study region) is associated with a
-    +15 Mg/ha change in AGB at this site". This makes the three coefficients
+    +15 Mg/ha change in AGBD at this site". This makes the three coefficients
     directly comparable at a given site AND across sites.
 
     R^2 is invariant under linear rescaling of the predictors so it matches
@@ -110,10 +110,10 @@ def _ols_fit_standardised(H, C, S, AGB,
     S_std = (S - g_means['Stem'])   / g_sds['Stem']
 
     X = np.column_stack([H_std, C_std, S_std, np.ones_like(H_std)])
-    coef, *_ = np.linalg.lstsq(X, AGB, rcond=None)
+    coef, *_ = np.linalg.lstsq(X, AGBD, rcond=None)
     pred = X @ coef
-    ss_res = float(np.sum((AGB - pred) ** 2))
-    ss_tot = float(np.sum((AGB - AGB.mean()) ** 2))
+    ss_res = float(np.sum((AGBD - pred) ** 2))
+    ss_tot = float(np.sum((AGBD - AGBD.mean()) ** 2))
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else np.nan
 
     obs_ranges = {
@@ -144,7 +144,7 @@ def _compute_global_scaling() -> dict[str, dict[str, dict[str, float]]]:
             except Exception as e:
                 print(f"  [WARN] {site}: {e}")
                 continue
-            keys = [f"{model}_AGB", f"{model}_Height",
+            keys = [f"{model}_AGBD", f"{model}_Height",
                     f"{model}_Cover", f"{model}_Stem"]
             m = joint_valid_mask(bundle, keys)
             if m.sum() < 200:
@@ -196,12 +196,12 @@ def main():
         site_fig, site_axes = plt.subplots(1, 3, figsize=(14, 4))
 
         for model in MODELS:
-            keys = [f"{model}_AGB", f"{model}_Height",
+            keys = [f"{model}_AGBD", f"{model}_Height",
                     f"{model}_Cover", f"{model}_Stem"]
             m = joint_valid_mask(bundle, keys)
             if m.sum() < 200:
                 continue
-            agb = bundle["arrays"][f"{model}_AGB"][m]
+            agbd = bundle["arrays"][f"{model}_AGBD"][m]
             h   = bundle["arrays"][f"{model}_Height"][m]
             c   = bundle["arrays"][f"{model}_Cover"][m]
             s   = bundle["arrays"][f"{model}_Stem"][m]
@@ -212,13 +212,13 @@ def main():
             g_means_flat = {k: v["mean"] for k, v in scaling[model].items()}
             g_sds_flat   = {k: v["sd"]   for k, v in scaling[model].items()}
             coef, r2, obs_ranges = _ols_fit_standardised(
-                h, c, s, agb, g_means_flat, g_sds_flat,
+                h, c, s, agbd, g_means_flat, g_sds_flat,
             )
             # coef_std_Height, coef_std_Cover, coef_std_Stem, std_intercept
             # Range contributions: coef_std × (site_range / global_sd) gives
-            # the AGB change (Mg/ha) associated with the observed range of
+            # the AGBD change (Mg/ha) associated with the observed range of
             # that predictor at this specific site. This is the physically-
-            # interpretable "how much AGB does the observed range of this
+            # interpretable "how much AGBD does the observed range of this
             # predictor account for at this site" quantity.
             range_h = obs_ranges["Height"] / scaling[model]["Height"]["sd"] * coef[0]
             range_c = obs_ranges["Cover"]  / scaling[model]["Cover"]["sd"]  * coef[1]
@@ -250,7 +250,7 @@ def main():
             # ---- Curves -----------------------------------------------------
             for ax, (pname, edges) in zip(site_axes, PREDICTORS.items()):
                 x = {"Height": h, "Cover": c, "Stem": s}[pname]
-                cx, my, sd = _binned_curve(x, agb, edges)
+                cx, my, sd = _binned_curve(x, agbd, edges)
                 if cx.size > 0:
                     color = COLOURS[model]
                     ax.plot(cx, my, color=color, lw=1.7, label=model)
@@ -260,8 +260,8 @@ def main():
 
         for ax, pname in zip(site_axes, PREDICTORS):
             ax.set_xlabel(f"{pname} [{ATTRIBUTES[pname]['unit']}]")
-            ax.set_ylabel("AGB [Mg/ha]")
-            ax.set_title(f"{site}: AGB vs {pname}")
+            ax.set_ylabel("AGBD [Mg/ha]")
+            ax.set_title(f"{site}: AGBD vs {pname}")
             ax.grid(alpha=0.3); ax.legend(fontsize=8)
         site_fig.tight_layout()
         site_fig.savefig(DETAIL_DIR / f"{site}.png",
@@ -291,8 +291,8 @@ def main():
             ax.fill_between(xg, mean - sd, mean + sd,
                             color=color, alpha=0.2)
         ax.set_xlabel(f"{pname} [{ATTRIBUTES[pname]['unit']}]")
-        ax.set_ylabel("AGB [Mg/ha]")
-        ax.set_title(f"Allometric curve: AGB vs {pname} (mean ± sd across sites)")
+        ax.set_ylabel("AGBD [Mg/ha]")
+        ax.set_title(f"Allometric curve: AGBD vs {pname} (mean ± sd across sites)")
         ax.grid(alpha=0.3); ax.legend()
         fig.tight_layout()
         fig.savefig(OUT / f"allometric_curves_{pname}.png",

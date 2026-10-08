@@ -1,7 +1,7 @@
 """
 06 — Spatial residual maps and Moran's I.
 
-For Height and Cover (the attributes with a GEDI reference) and for AGB
+For Height and Cover (the attributes with a GEDI reference) and for AGBD
 (against CCI as a comparator, *not* a reference), compute per-pixel residuals
 (candidate − reference), save a residual GeoTIFF, plot the residual map, and
 compute global Moran's I to test whether residuals are spatially clustered.
@@ -36,11 +36,11 @@ OUT = OUTPUT_DIR / "06_spatial_residuals"
 OUT.mkdir(parents=True, exist_ok=True)
 
 
-# (attribute, reference key) — "reference" loosely here; for AGB it's a comparator
+# (attribute, reference key) — "reference" loosely here; for AGBD it's a comparator
 TARGETS = [
     ("Height", "GEDI_RH98"),
     ("Cover",  "GEDI_Cover"),
-    ("AGB",    "CCI_AGB"),       # treat as comparator, not truth
+    ("AGBD",    "CCI_AGBD"),       # treat as comparator, not truth
 ]
 
 

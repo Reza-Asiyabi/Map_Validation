@@ -8,7 +8,7 @@ Folder layout assumed (per site):
         GeoTiffs_2020/*.tif         # multi-band EO, band 30 = GEDI Cover, band 31 = GEDI RH98
         PG-CBM_055095_2020/AGB/*.tif, Height/*.tif, Cover/*.tif, Stem/*.tif
         StruMPL_055095_2020/   (same four sub-folders)
-        External_Rf/*.tif           # 4 bands: 1=Lang H, 2=Hansen C, 3=CCI AGB, 4=GEDI L4B AGB
+        External_Rf/*.tif           # 4 bands: 1=Lang H, 2=Hansen C, 3=CCI AGBD, 4=GEDI L4B AGBD
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ MODEL_LAYOUT = {
         "dir":        "PG-CBM_055095_{year}",   # the per-year folder name
         "layout": "subfolder_per_attribute",
         "attr_subfolders": {
-            "AGB":    "AGB",
+            "AGBD":   "AGB",    # input sub-folder name on disk: unchanged
             "Height": "Height",
             "Cover":  "Cover",
             "Stem":   "Stem",
@@ -81,7 +81,7 @@ MODEL_LAYOUT = {
         # tokens that appear in the .tif filenames, e.g.
         #   LonLat_ALOS_HLSL_GEDI_img_Ang_2020-01-01_Biomass_pred.tif
         "attr_tokens": {
-            "AGB":    "Biomass",
+            "AGBD":   "Biomass",
             "Height": "Height",
             "Cover":  "Cover",
             "Stem":   "StemDensity",
@@ -102,8 +102,8 @@ EXTERNAL_DIR        = "External_Ref_{year}"
 EXT_BANDS = {           # 1-based band indices within the per-year External tif
     "Lang_Height":   1,
     "Hansen_Cover":  2,
-    "CCI_AGB":       3,
-    "GEDI_L4B_AGB":  4,
+    "CCI_AGBD":       3,
+    "GEDI_L4B_AGBD":  4,
     "GEDI_Cover":    5,   # GEDI canopy cover (ground-truth reference)
     "GEDI_RH98":     6,   # GEDI RH98 canopy height (ground-truth reference)
 }
@@ -149,12 +149,12 @@ ATTRIBUTES = {
         "ref":       "GEDI_Cover",
         "externals": ["Hansen_Cover"],
     },
-    "AGB": {
+    "AGBD": {
         "unit":      "Mg/ha",
         "vmin":      0,
         "vmax":      150,
         "ref":       None,             # no ground truth
-        "externals": ["CCI_AGB", "GEDI_L4B_AGB"],
+        "externals": ["CCI_AGBD", "GEDI_L4B_AGBD"],
     },
     "Stem": {
         "unit":      "stems/ha",
@@ -175,8 +175,8 @@ COLOURS = {
     "GEDI_Cover":   "#000000",
     "Lang_Height":  "#2166ac",   # blue
     "Hansen_Cover": "#2166ac",
-    "CCI_AGB":      "#b2182b",   # red
-    "GEDI_L4B_AGB": "#d6604d",   # light red
+    "CCI_AGBD":      "#b2182b",   # red
+    "GEDI_L4B_AGBD": "#d6604d",   # light red
 }
 
 # Sub-sampling for scatter / pair plots (memory & rendering)
