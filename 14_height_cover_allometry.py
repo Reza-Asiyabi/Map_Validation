@@ -76,7 +76,7 @@ OUT_WALL.mkdir(exist_ok=True)
 # For a StruMPL-only paper figure, set to ["StruMPL"]. To compare StruMPL and
 # PG-CBM on one figure, set to ["StruMPL", "PG-CBM"]. Any model in config.MODELS
 # is valid here.
-MODELS_TO_PLOT = ["StruMPL", "PG-CBM"]
+MODELS_TO_PLOT = ["StruMPL"] #, "PG-CBM"
 
 
 # Bin edges for the two directions of the H↔C curve

@@ -34,7 +34,7 @@ SITES: list[str] = [
     "Zim",
 ]
 
-MODELS = ["StruMPL"]
+MODELS = ["StruMPL"] #, "PG-CBM"
 
 # Years included in temporal analyses. The first entry is also the DEFAULT
 # year used by the single-year scripts (01-09), so changing it switches their
