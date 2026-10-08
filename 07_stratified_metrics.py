@@ -30,7 +30,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import SITES, ATTRIBUTES, OUTPUT_DIR, COLOURS
+from config import SITES, ATTRIBUTES, OUTPUT_DIR, COLOURS, COVER_SCALE
 from io_utils import load_site, gedi_mask, joint_valid_mask
 from metrics import error_metrics
 
@@ -41,14 +41,14 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 REF_BINS = {
     "Height": np.array([0, 3, 6, 9, 12, 15, 20, 30]),
-    "Cover":  np.array([0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]),
+    "Cover":  np.array([0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]) * COVER_SCALE,
     "AGB":    np.array([0, 10, 25, 50, 100, 200, 400]),
 }
 
 COVER_CLASSES = {
-    "Sparse": (0.0, 0.10),
-    "Open":   (0.10, 0.40),
-    "Closed": (0.40, 1.01),
+    "Sparse": (0.0 * COVER_SCALE, 0.10 * COVER_SCALE),
+    "Open":   (0.10 * COVER_SCALE, 0.40 * COVER_SCALE),
+    "Closed": (0.40 * COVER_SCALE, 1.01 * COVER_SCALE),
 }
 
 

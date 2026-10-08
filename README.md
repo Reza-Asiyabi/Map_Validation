@@ -81,6 +81,14 @@ OUTPUT_DIR/
 
 ## Design notes
 
+- **Cover units are switchable.** Input rasters hold canopy cover as a fraction
+  [0, 1] and are never modified. `COVER_UNITS` in `config.py` (`"fraction"` or
+  `"percent"`) controls how cover appears in every output (metrics, plots,
+  CSVs, residual rasters). Scaling is applied once in `io_utils.load_site_year`;
+  cover bins/classes in scripts 07, 08 and 14 follow `COVER_SCALE`. Unit-free
+  metrics (r, R², rRMSE) are unaffected. Re-run the full pipeline after
+  changing it, since scripts 09 and `aggregate_*` read earlier outputs.
+
 - **No reprojection or resampling.** All maps per site are assumed already on
   a common grid. The I/O layer asserts shape equality and fails loudly otherwise.
 - **GEDI pixels not footprints.** The user confirmed GEDI footprints are already

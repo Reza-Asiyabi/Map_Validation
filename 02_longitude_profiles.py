@@ -209,7 +209,7 @@ def main():
 
         # ---- Visual summary figures ----------------------------------------
         # One 3-panel figure PER ATTRIBUTE (Height, Cover, ...). Cover and
-        # Height live on very different dynamic ranges (Cover ∈ [0,1] vs
+        # Height live on very different dynamic ranges (Cover ∈ [0,1] or [0,100] vs
         # Height ∈ [0,25] m), so plotting them on the same axes would squash
         # the smaller one into a flat line — splitting by attribute is the
         # right fix.

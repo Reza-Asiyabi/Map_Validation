@@ -9,6 +9,7 @@ All arrays are 2-D numpy float32, NaN for nodata, same shape per site
 """
 
 from __future__ import annotations
+import warnings
 from pathlib import Path
 from typing import Dict, Tuple
 
@@ -20,6 +21,7 @@ from rasterio.warp import transform as warp_transform
 from config import (
     ROOT_DIR, MODELS, MODEL_LAYOUT, YEARS, DEFAULT_YEAR,
     EXTERNAL_PARENT_DIR, EXTERNAL_DIR, EXT_BANDS, ATTRIBUTES,
+    COVER_SCALE, COVER_KEYS, COVER_UNITS,
 )
 
 
@@ -79,6 +81,30 @@ def _verify_shape(arr: np.ndarray, ref_shape: tuple, name: str):
             f"Shape mismatch for {name}: got {arr.shape}, expected {ref_shape}.\n"
             f"This module assumes maps are pre-aligned to a common grid per site."
         )
+
+
+def _rescale_cover(arrays: Dict[str, np.ndarray], site: str, year: int) -> None:
+    """
+    Multiply every cover array by COVER_SCALE, in place (NaN preserved).
+    Inputs are expected as fractions in [0, 1]; a maximum well above 1 means
+    the data is probably already in percent, so we warn instead of silently
+    scaling it twice.
+    """
+    for key in COVER_KEYS:
+        arr = arrays.get(key)
+        if arr is None:
+            continue
+        if np.isfinite(arr).any():
+            mx = float(np.nanmax(arr))
+            if mx > 1.5:
+                warnings.warn(
+                    f"{site} {year} {key}: max={mx:.3g} > 1.5, but cover is "
+                    f"expected as a fraction in [0, 1]. Input may already be "
+                    f"in percent (COVER_UNITS={COVER_UNITS!r}).",
+                    stacklevel=3,
+                )
+        if COVER_SCALE != 1.0:
+            arrays[key] = arr * np.float32(COVER_SCALE)
 
 
 def load_site_year(site: str, year: int,
@@ -167,6 +193,11 @@ def load_site_year(site: str, year: int,
         arr, _ = _read_band(ext_tif, band=band)
         _verify_shape(arr, ref_shape, name)
         arrays[name] = arr
+
+    # ---- Canopy cover units ---------------------------------------------------
+    # Inputs are fractions in [0, 1]; optionally convert to percent here so
+    # every downstream script sees the configured unit (config.COVER_UNITS).
+    _rescale_cover(arrays, site, year)
 
     # ---- lon/lat per pixel (2-D, same shape as rasters) ----------------------
     h, w = ref_shape
