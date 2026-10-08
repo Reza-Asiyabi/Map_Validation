@@ -125,7 +125,7 @@ def load_site_year(site: str, year: int,
     Array keys:
         f"{model}_{attr}"    for model in MODELS, attr in 4 attributes
         "GEDI_RH98", "GEDI_Cover"
-        "Lang_Height", "Hansen_Cover", "CCI_AGB", "GEDI_L4B_AGB"
+        "Lang_Height", "Hansen_Cover", "CCI_AGBD", "GEDI_L4B_AGBD"
     """
     site_dir = Path(root_dir) / site
     if not site_dir.is_dir():

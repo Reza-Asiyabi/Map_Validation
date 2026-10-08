@@ -2,7 +2,7 @@
 03 — Within-model attribute pair scatterplots & correlations.
 
 For each model (PG-CBM, StruMPL) and each site, create a 4x4 pair-plot of the
-four attributes (AGB, Height, Cover, Stem). Diagonal = density; lower triangle
+four attributes (AGBD, Height, Cover, Stem). Diagonal = density; lower triangle
 = scatter + LOESS; upper triangle = Pearson r (and Spearman ρ).
 
 This is the Python equivalent of your R ggpairs/GGally workflow. We use seaborn
@@ -33,7 +33,7 @@ from io_utils import load_site, density_scatter
 OUT = OUTPUT_DIR / "03_attribute_pairs"
 OUT.mkdir(parents=True, exist_ok=True)
 
-ATTRS_ORDER = ["AGB", "Height", "Cover", "Stem"]
+ATTRS_ORDER = ["AGBD", "Height", "Cover", "Stem"]
 
 
 def _pair_plot(df: pd.DataFrame, title: str, color: str, out_path: Path):

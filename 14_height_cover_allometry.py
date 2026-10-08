@@ -1,7 +1,7 @@
 """
 14 — Height vs Cover allometric relationship: model vs GEDI.
 
-Unlike script 08 (which fits within-model H/C/S → AGB and has no external
+Unlike script 08 (which fits within-model H/C/S → AGBD and has no external
 reference), the H↔C relationship CAN be checked against GEDI: GEDI measures
 both RH98 (height) and Cover at the same footprint, so we have a true
 reference curve.

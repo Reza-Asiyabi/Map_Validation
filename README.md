@@ -1,9 +1,9 @@
 # Forest attribute map validation (PG-CBM & StruMPL)
 
 Python scripts to validate two model outputs (PG-CBM, StruMPL) for four forest
-attributes (AGB, Height, Cover, Stem Density) across 10 African sites,
+attributes (AGBD, Height, Cover, Stem Density) across 10 African sites,
 against GEDI ground truth and external reference products (Lang Height,
-Hansen Cover, CCI AGB, GEDI L4B AGB).
+Hansen Cover, CCI AGBD, GEDI L4B AGBD).
 
 ## Quick start
 
@@ -39,7 +39,7 @@ Each script writes to `OUTPUT_DIR/<NN_method_name>/`.
 | 05 | distributions | Are the value distributions consistent? Q-Q plots reveal saturation; KS gives a number |
 | 06 | spatial_residuals | Are residuals spatially clustered? (Moran's I) — and what do the residual maps look like? |
 | 07 | stratified_metrics | Where does each model fail? RMSE/bias binned by reference value (saturation diagnostic) and cover class |
-| 08 | allometric_consistency | Is each model internally consistent? AGB vs H/C/S response curves + OLS fits |
+| 08 | allometric_consistency | Is each model internally consistent? AGBD vs H/C/S response curves + OLS fits |
 | 09 | summary_tables | Compact tables for paper / head-to-head PG-CBM vs StruMPL with paired Wilcoxon |
 
 ## Outputs
@@ -97,7 +97,7 @@ OUTPUT_DIR/
 - **Bootstrap CIs are across sites**, not across pixels. Pixel-level bootstrap
   ignores spatial autocorrelation and dramatically understates uncertainty.
   With 10 sites you get usable but wide CIs — that's an honest picture.
-- **For AGB**, no ground truth exists. Metrics against CCI / GEDI L4B should be
+- **For AGBD**, no ground truth exists. Metrics against CCI / GEDI L4B should be
   read as *inter-product agreement*, not error. The summary tables label these
   appropriately.
 - **For Stem density**, no external reference. Validation relies on

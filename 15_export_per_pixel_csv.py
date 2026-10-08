@@ -9,11 +9,11 @@ Column schema (in order):
     site_id, row, col,
     GEDI_Height_<year>     (one per year, from External_Ref bands)
     GEDI_Cover_<year>      (one per year)
-    GEDI_AGB_<year>        (one per year; this is the GEDI_L4B_AGB layer)
+    GEDI_AGBD_<year>        (one per year; this is the GEDI_L4B_AGBD layer)
     Lang_Height_<year>     (one per year)
     Hansen_Cover_<year>    (one per year)
-    CCI_AGB_<year>         (one per year)
-    PG-CBM_<Attribute>_<year>    (Attribute in {AGB,Height,Cover,Stem,WoodDensity},
+    CCI_AGBD_<year>         (one per year)
+    PG-CBM_<Attribute>_<year>    (Attribute in {AGBD,Height,Cover,Stem,WoodDensity},
                                   one per year)
     StruMPL_<Attribute>_<year>   (same 5 × 4 years)
 
@@ -58,17 +58,17 @@ OUT.mkdir(parents=True, exist_ok=True)
 
 
 # All attributes we want exported per model.
-ATTRIBUTES_TO_EXPORT = ["AGB", "Height", "Cover", "Stem"]
+ATTRIBUTES_TO_EXPORT = ["AGBD", "Height", "Cover", "Stem"]
 
 # Per-year external/GEDI sources we include. Each maps from its bundle key
 # (left) to the CSV column prefix (right). The year suffix is appended later.
 PER_YEAR_EXTERNAL_SOURCES = {
     "GEDI_RH98":     "GEDI_Height",
     "GEDI_Cover":    "GEDI_Cover",
-    "GEDI_L4B_AGB":  "GEDI_AGB",
+    "GEDI_L4B_AGBD":  "GEDI_AGBD",
     "Lang_Height":   "Lang_Height",
     "Hansen_Cover":  "Hansen_Cover",
-    "CCI_AGB":       "CCI_AGB",
+    "CCI_AGBD":       "CCI_AGBD",
 }
 
 

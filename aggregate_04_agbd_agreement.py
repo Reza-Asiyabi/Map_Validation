@@ -1,13 +1,13 @@
 """
-aggregate_04_agb_agreement.py — StruMPL AGB agreement against external
+aggregate_04_agbd_agreement.py — StruMPL AGBD agreement against external
 products, per site x year and aggregated across the 40 site-year cells.
 
-Produces the exact numbers needed for the paper's "AGB Agreement Against
+Produces the exact numbers needed for the paper's "AGBD Agreement Against
 External Products" table and paragraph.
 
 For each of the ten test sites and each of the four years (2019-2022), and
 for each of the three comparators (CCI Biomass, GEDI L4B, PG-CBM), we
-compute the pixel-level Pearson correlation and RMSE between StruMPL AGB
+compute the pixel-level Pearson correlation and RMSE between StruMPL AGBD
 and the comparator on the joint-valid pixel mask (pixels finite for both).
 Then we aggregate across the 40 site-year cells to produce the cross-site
 x cross-year mean +/- SD per pair.
@@ -17,16 +17,16 @@ a per-pixel ground reference. The correlation and RMSE reflect the
 combined uncertainty of both products in each pair.
 
 Also computed for the last paragraph of the subsection:
-  - site-mean AGB per site per year (drives the high/low biomass split)
+  - site-mean AGBD per site per year (drives the high/low biomass split)
   - a wide-format "per-cell disagreement" table with StruMPL and each of
     the three comparators, so you can inspect which sites drive the
     largest disagreements.
 
-Outputs (under OUTPUT_DIR/04_agb_agreement/):
+Outputs (under OUTPUT_DIR/04_agbd_agreement/):
     per_cell_metrics.csv        one row per (site, year, comparator) with
                                 Pearson r, RMSE, and n_pixels
-    site_mean_agb.csv           one row per (site, year) with the site
-                                mean of StruMPL AGB and each comparator
+    site_mean_agbd.csv           one row per (site, year) with the site
+                                mean of StruMPL AGBD and each comparator
     agreement_summary.csv       one row per comparator with cross-site x
                                 cross-year mean and SD of r and RMSE.
                                 THESE ARE THE TABLE NUMBERS.
@@ -45,7 +45,7 @@ from config import SITES, YEARS, OUTPUT_DIR
 from io_utils import load_site_year
 
 
-OUT = OUTPUT_DIR / "04_agb_agreement"
+OUT = OUTPUT_DIR / "04_agbd_agreement"
 OUT.mkdir(parents=True, exist_ok=True)
 
 
@@ -53,9 +53,9 @@ OUT.mkdir(parents=True, exist_ok=True)
 # label used in output tables (right). Adjust these if your bundle uses
 # different keys.
 COMPARATORS: dict[str, str] = {
-    "CCI_AGB":      "CCI",
-    "GEDI_L4B_AGB": "L4B",
-    "PG-CBM_AGB":   "PG-CBM",
+    "CCI_AGBD":      "CCI",
+    "GEDI_L4B_AGBD": "L4B",
+    "PG-CBM_AGBD":   "PG-CBM",
 }
 
 # Minimum finite-pixel count in a site-year cell for its metrics to be
@@ -81,7 +81,7 @@ def _pair_metrics(a: np.ndarray, b: np.ndarray) -> dict:
 
 def _compute_per_cell() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Per (site, year, comparator) metrics AND per (site, year) site-mean
-    AGB for every source. Returns (per_cell, site_means)."""
+    AGBD for every source. Returns (per_cell, site_means)."""
     per_cell_rows = []
     site_mean_rows = []
     for site in SITES:
@@ -93,12 +93,12 @@ def _compute_per_cell() -> tuple[pd.DataFrame, pd.DataFrame]:
                 continue
 
             arrays = bundle["arrays"]
-            if "StruMPL_AGB" not in arrays:
-                print(f"  [WARN] {site} {year}: StruMPL_AGB missing")
+            if "StruMPL_AGBD" not in arrays:
+                print(f"  [WARN] {site} {year}: StruMPL_AGBD missing")
                 continue
-            strumpl = arrays["StruMPL_AGB"].ravel()
+            strumpl = arrays["StruMPL_AGBD"].ravel()
 
-            # Site-mean AGB for each source that is present. The mean is
+            # Site-mean AGBD for each source that is present. The mean is
             # over finite pixels only; a source absent from the bundle
             # gets NaN.
             row = {"site": site, "year": int(year),
@@ -165,20 +165,20 @@ def _aggregate_across_cells(per_cell: pd.DataFrame) -> pd.DataFrame:
 
 
 def main():
-    print(f"[agg04-agb] computing per-cell metrics across "
+    print(f"[agg04-agbd] computing per-cell metrics across "
           f"{len(SITES)} sites x {len(YEARS)} years x {len(COMPARATORS)} comparators")
     per_cell, site_means = _compute_per_cell()
     per_cell_path = OUT / "per_cell_metrics.csv"
-    site_mean_path = OUT / "site_mean_agb.csv"
+    site_mean_path = OUT / "site_mean_agbd.csv"
     per_cell.to_csv(per_cell_path, index=False)
     site_means.to_csv(site_mean_path, index=False)
-    print(f"[agg04-agb] wrote {per_cell_path.name}  ({len(per_cell)} rows)")
-    print(f"[agg04-agb] wrote {site_mean_path.name}  ({len(site_means)} rows)")
+    print(f"[agg04-agbd] wrote {per_cell_path.name}  ({len(per_cell)} rows)")
+    print(f"[agg04-agbd] wrote {site_mean_path.name}  ({len(site_means)} rows)")
 
     summary = _aggregate_across_cells(per_cell)
     summary_path = OUT / "agreement_summary.csv"
     summary.to_csv(summary_path, index=False)
-    print(f"[agg04-agb] wrote {summary_path.name}")
+    print(f"[agg04-agbd] wrote {summary_path.name}")
 
     # Print a paper-ready summary directly to the console for convenience.
     print("\n=== Paper table values ===")
@@ -191,7 +191,7 @@ def main():
             f"{row['rmse_mean']:>+15.2f} +/- {row['rmse_sd']:>10.2f}"
         )
 
-    print("[agg04-agb] done.")
+    print("[agg04-agbd] done.")
 
 
 if __name__ == "__main__":

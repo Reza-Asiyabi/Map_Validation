@@ -7,7 +7,7 @@ what it computes, the maths, what files it writes, and a "how to interpret"
 section describing what a good versus a problematic result looks like.
 
 The suite validates two models (**PG-CBM** and **StruMPL**) for five forest
-attributes — **AGB** (above-ground biomass), **Height** (canopy height),
+attributes — **AGBD** (above-ground biomass), **Height** (canopy height),
 **Cover** (canopy cover), **Stem Density**, and **Wood Density** — across 10
 African sites and 4 years (**2019–2022**), against GEDI ground truth and
 external reference products.
@@ -50,17 +50,17 @@ because the five attributes sit at different rungs of evidential strength:
 |---|---|---|
 | **Height** | GEDI RH98 (sparse) | **Accuracy** — how close the map is to truth |
 | **Cover** | GEDI Cover (sparse) | **Accuracy** |
-| **AGB** | None | **Agreement** — consistency with other products, not accuracy |
+| **AGBD** | None | **Agreement** — consistency with other products, not accuracy |
 | **Stem** | None, no external map | **Plausibility & internal consistency** only |
 | **Wood Density** | None, no external map | **Plausibility & internal consistency** only |
 
 This distinction runs through the whole suite. When you compare Height against
-GEDI you can say "PG-CBM has an RMSE of X metres." When you compare AGB against
+GEDI you can say "PG-CBM has an RMSE of X metres." When you compare AGBD against
 CCI you can only say "PG-CBM and CCI agree to within X Mg/ha" — if they disagree,
 the data alone cannot tell you which one is wrong. The scripts compute the same
 arithmetic in both cases, but the **interpretation** must respect this ceiling.
 Throughout this guide, "reference" means GEDI (true reference) for Height/Cover
-and a "comparator" (CCI, GEDI L4B) for AGB.
+and a "comparator" (CCI, GEDI L4B) for AGBD.
 
 GEDI itself is a *reference*, not perfect truth: RH98 carries noise from beam
 sensitivity, geolocation, and terrain slope. It's the best available, but a
@@ -77,7 +77,7 @@ Per site, the loader expects this folder layout (configured in `config.py`):
 <site>/
 ├── PG-CBM_055095/
 │   ├── PG-CBM_055095_2019/
-│   │   ├── AGB/*.tif
+│   │   ├── AGB/*.tif   (input folder name, unchanged)
 │   │   ├── Height/*.tif
 │   │   ├── Cover/*.tif
 │   │   ├── Stem/*.tif
@@ -99,8 +99,8 @@ Per site, the loader expects this folder layout (configured in `config.py`):
     └── External_Ref_2022/*.tif
 ```
 
-The external stack has bands:  1=Lang_Height, 2=Hansen_Cover, 3=CCI_AGB,
-4=GEDI_L4B_AGB, 5=GEDI_Cover, 6=GEDI_RH98.
+The external stack has bands:  1=Lang_Height, 2=Hansen_Cover, 3=CCI_AGBD,
+4=GEDI_L4B_AGBD, 5=GEDI_Cover, 6=GEDI_RH98.
 
 **Critical assumption: all maps within a site are already on a common grid**
 (same CRS, resolution, extent). The loader verifies this and raises an error if
@@ -234,7 +234,7 @@ path or a threshold. Key entries:
   contain `{year}` placeholders that are filled in at load time. PG-CBM uses
   `subfolder_per_attribute`; StruMPL uses `flat_with_filename_pattern` with
   `attr_tokens` mapping each attribute to a substring in the filename
-  (`AGB→"Biomass"`, `Stem→"StemDensity"`, `WoodDensity→"WoodDensity"`, etc.).
+  (`AGBD→"Biomass"`, `Stem→"StemDensity"`, `WoodDensity→"WoodDensity"`, etc.).
   The token match is **case-sensitive** — if filenames vary in case across
   sites this is the first place to look when a file isn't found.
 - `EXTERNAL_PARENT_DIR = "External_Ref"`, `EXTERNAL_DIR = "External_Ref_{year}"`
@@ -264,8 +264,8 @@ Bundle contents:
 
 - `bundle["arrays"]` — dict of 2-D float32 arrays, nodata as `NaN`, keyed by
   `f"{model}_{attr}"` (e.g. `"PG-CBM_Height"`), plus `"GEDI_RH98"`,
-  `"GEDI_Cover"`, `"Lang_Height"`, `"Hansen_Cover"`, `"CCI_AGB"`,
-  `"GEDI_L4B_AGB"`.
+  `"GEDI_Cover"`, `"Lang_Height"`, `"Hansen_Cover"`, `"CCI_AGBD"`,
+  `"GEDI_L4B_AGBD"`.
 - `bundle["lon"]`, `bundle["lat"]` — 2-D coordinate arrays (pixel centres,
   reprojected to EPSG:4326 if needed), same shape as the rasters.
 - `bundle["x_native"]`, `bundle["y_native"]` — native CRS coordinates, in
@@ -277,7 +277,7 @@ Bundle contents:
 Helper functions:
 
 - `gedi_mask(bundle, attribute)` — boolean array of pixels where the GEDI
-  reference for that attribute is finite; returns `None` for AGB/Stem/WoodDensity
+  reference for that attribute is finite; returns `None` for AGBD/Stem/WoodDensity
   (no GEDI reference). **This is the masking backbone**: it's how every
   GEDI-referenced comparison restricts itself to the sparse footprints.
 - `joint_valid_mask(bundle, keys)` — True only where *all* listed arrays are
@@ -488,7 +488,7 @@ so source colour stays constant across both bars.
 ### Logic
 
 For each model and site, build a 4×4 matrix comparing that model's four core
-attributes (AGB, Height, Cover, Stem) against each other:
+attributes (AGBD, Height, Cover, Stem) against each other:
 
 - **Diagonal** — histogram (density) of each attribute.
 - **Lower triangle** — density-coloured scatter of every attribute pair (every
@@ -517,7 +517,7 @@ This is a **consistency** check, not an accuracy check — there's no external
 truth involved. You're asking: *do this model's attributes relate to each other
 the way forest ecology says they should?*
 
-- **Expected couplings** (should be positive): AGB↔Height, AGB↔Cover, AGB↔Stem,
+- **Expected couplings** (should be positive): AGBD↔Height, AGBD↔Cover, AGBD↔Stem,
   Height↔Cover. Taller, denser, more-stemmed forest should carry more biomass.
 - **A near-perfect correlation (|r| > 0.97) between two attributes is a red
   flag**, not a success: it suggests the model isn't predicting them
@@ -547,7 +547,7 @@ plot across all available sources:
 
 - Height: PG-CBM, StruMPL, Lang, GEDI_RH98
 - Cover: PG-CBM, StruMPL, Hansen, GEDI_Cover
-- AGB: PG-CBM, StruMPL, CCI, GEDI_L4B
+- AGBD: PG-CBM, StruMPL, CCI, GEDI_L4B
 - Stem: PG-CBM, StruMPL (no externals)
 
 **Masking:** if a GEDI reference exists for the attribute, all sources are
@@ -570,7 +570,7 @@ two sources agree in level, not just in correlation.
   and magnitude. **Points correlated but parallel-shifted off the 1:1 line** =
   they agree on pattern but disagree on level (one is biased relative to the
   other).
-- **For AGB this is your main quantitative tool** since there's no truth. If
+- **For AGBD this is your main quantitative tool** since there's no truth. If
   PG-CBM, StruMPL, CCI, and GEDI L4B all cluster tightly, you have a "converging
   evidence" argument. Where they fan out, none can be declared right — report it
   as genuine inter-product uncertainty.
@@ -595,7 +595,7 @@ predicting too few very-tall or very-short pixels. Mean-based metrics miss this;
 distribution comparison catches it. For each attribute:
 
 - Pick an **anchor**: the GEDI reference where it exists, otherwise the first
-  available source (PG-CBM) for AGB/Stem.
+  available source (PG-CBM) for AGBD/Stem.
 - Plot **empirical CDFs** of the anchor and each candidate on shared axes.
 - Plot an **empirical Q-Q**: the 1st–99th percentiles of each candidate against
   the same percentiles of the anchor, with a 1:1 reference line.
@@ -615,7 +615,7 @@ distribution comparison catches it. For each attribute:
   1:1 line*, its distribution matches the anchor. Two classic departures:
   - **S-shape flattening at the top** (candidate's high quantiles fall below the
     1:1 line) = **saturation**: the model can't reach the tallest/highest values.
-    Very common for canopy height (plateau ~20–25 m) and AGB (plateau
+    Very common for canopy height (plateau ~20–25 m) and AGBD (plateau
     ~150–200 Mg/ha). This is often the headline limitation of a deep-learning
     structure map.
   - **Compression toward the middle** (steep in the centre, flat at both ends) =
@@ -626,7 +626,7 @@ distribution comparison catches it. For each attribute:
   p-value.** A small D (≈0.05) means the distributions are practically
   identical regardless of significance; a large D (>0.2) means a real shape
   mismatch.
-- For AGB/Stem the anchor is just a reference point, not truth — the comparison
+- For AGBD/Stem the anchor is just a reference point, not truth — the comparison
   shows whether sources have the *same shape*, not which shape is correct.
 
 ---
@@ -643,7 +643,7 @@ distribution comparison catches it. For each attribute:
 A well-behaved model's residuals (`pred − reference`) should look like spatial
 white noise. If residuals cluster — whole regions over- or under-predicted — the
 model is missing something systematic (a covariate, a regional calibration
-issue). For Height and Cover (vs GEDI) and AGB (vs CCI, as a comparator):
+issue). For Height and Cover (vs GEDI) and AGBD (vs CCI, as a comparator):
 
 1. Compute per-pixel residuals over the valid mask.
 2. Write a residual **GeoTIFF** (so you can overlay it in QGIS/GEE) and a
@@ -697,7 +697,7 @@ Interpretation of the statistic itself:
 - **Then read Moran's I.** A significant positive I (p < 0.05) confirms
   statistically what the map shows. Compare I between PG-CBM and StruMPL: the
   model with I closer to zero has more random (better-behaved) errors.
-- **Caveat for AGB:** residuals here are `model − CCI`, so a structured pattern
+- **Caveat for AGBD:** residuals here are `model − CCI`, so a structured pattern
   could be the model's fault *or* CCI's. Don't attribute the structure to your
   model without corroboration.
 - **Slope/terrain reminder:** GEDI has known slope-related bias, so on steep
@@ -719,7 +719,7 @@ Two stratifications:
 metrics within each bin:
 - Height bins: `[0,3,6,9,12,15,20,30]` m
 - Cover bins: `[0,0.1,0.2,0.3,0.5,0.7,1.0]`
-- AGB bins (against CCI as comparator): `[0,10,25,50,100,200,400]` Mg/ha
+- AGBD bins (against CCI as comparator): `[0,10,25,50,100,200,400]` Mg/ha
 
 Bins with fewer than 30 pixels are skipped. This directly exposes **saturation**:
 if bias goes increasingly negative as the reference value rises, the model
@@ -749,13 +749,13 @@ proxy for ecological zone when you don't have an ecoregion raster — it answers
     ideal.
   - **Downward slope** (bias increasingly negative at high reference values) =
     classic saturation; the model compresses the top of the range. Expect this
-    for Height and AGB; the question is *how severe* and *which model is worse*.
+    for Height and AGBD; the question is *how severe* and *which model is worse*.
   - **Upward slope** = over-prediction at high values (less common).
 - **Cover-class table:** look for a class where RMSE balloons. A model that's
   fine in closed forest but poor in sparse woodland (or vice versa) has an
   ecological blind spot — important for African dryland sites where open
   woodland dominates.
-- **AGB stratification is against CCI**, so again it's agreement, not accuracy —
+- **AGBD stratification is against CCI**, so again it's agreement, not accuracy —
   divergence at high biomass may reflect CCI's own known saturation rather than
   your model's.
 
@@ -780,15 +780,15 @@ Forest structure obeys allometry: biomass rises monotonically with height,
 cover, and stem density. A self-consistent model should reproduce these. For
 each model and site:
 
-1. **Response curves.** Bin AGB by each predictor (Height, Cover, Stem) and plot
-   the mean AGB per bin (±sd). A flat or *decreasing* curve is a red flag — it
+1. **Response curves.** Bin AGBD by each predictor (Height, Cover, Stem) and plot
+   the mean AGBD per bin (±sd). A flat or *decreasing* curve is a red flag — it
    means the model predicts no (or inverted) biomass response to a driver that
    physically must increase it.
-2. **OLS fit.** Fit `AGB ≈ a·Height + b·Cover + c·Stem + d` per site via least
+2. **OLS fit.** Fit `AGBD ≈ a·Height + b·Cover + c·Stem + d` per site via least
    squares, reporting the coefficients, their signs, and the R². **All three
    coefficients should be positive**; a negative one signals the model has
    learned a physically implausible relationship. R² here measures how much of
-   the model's *own* AGB is explained by its *own* H/C/S — high R² means a
+   the model's *own* AGBD is explained by its *own* H/C/S — high R² means a
    tightly self-consistent model.
 3. **Model overlay.** Plot PG-CBM's and StruMPL's response curves on the same
    axes, per site and as a cross-site mean (interpolated onto a common predictor
@@ -798,7 +798,7 @@ each model and site:
 
 - `allometric_ols_per_site.csv` — coefficients, intercept, R², pixel count per
   (site, model).
-- `allometric_curves_<predictor>.png` — cross-site mean AGB-vs-predictor curve,
+- `allometric_curves_<predictor>.png` — cross-site mean AGBD-vs-predictor curve,
   PG-CBM vs StruMPL.
 - `allometric_curves_per_site/<site>.png` — the three response curves per site.
 
@@ -808,7 +808,7 @@ each model and site:
   on Height/Cover/Stem means that model, at that site, predicts that *more* of a
   structural driver yields *less* biomass — physically wrong, and a concrete flaw
   to report.
-- **Curve shape:** a monotonic rising AGB-vs-Height curve that eventually
+- **Curve shape:** a monotonic rising AGBD-vs-Height curve that eventually
   flattens is expected (large trees saturate). A curve that turns *down* at high
   predictor values is the warning sign.
 - **This is not accuracy.** A model can be perfectly self-consistent (clean
@@ -863,7 +863,7 @@ Reads `01_quantitative_metrics/per_site_metrics.csv` and produces:
   two sites are dominating — check the min/max columns and look at those sites
   individually (Scripts 02/06 maps will usually explain why).
 - This script only covers Height and Cover head-to-head, because those are the
-  only attributes with a true reference. For AGB, the model "comparison" is
+  only attributes with a true reference. For AGBD, the model "comparison" is
   agreement-based and lives in Script 04, not here.
 
 ---
@@ -1054,7 +1054,7 @@ each effect, complementing the mixed-model p-values.
 
 **(B) Allometric stability across years.**
 
-For each (model, year, site), fit `AGB ~ a·H + b·C + c·S + d` (same as
+For each (model, year, site), fit `AGBD ~ a·H + b·C + c·S + d` (same as
 script 08). Then measure how much the coefficients (a, b, c) drift across
 years at a given site. A physically consistent model has coefficients that
 barely move year-to-year; a model whose coefficients drift substantially has
@@ -1100,7 +1100,7 @@ Height ↔ Cover coupling that GEDI directly observes?**
 
 ### Logic
 
-Unlike script 08 (which fits within-model AGB allometry with no external
+Unlike script 08 (which fits within-model AGBD allometry with no external
 reference), the H↔C relationship CAN be checked against GEDI: GEDI measures
 both RH98 and Cover at the same footprint, so we have a true reference curve.
 
@@ -1187,10 +1187,10 @@ combination:
 
 - `site_id`, `row`, `col` (integer pixel coordinates)
 - 24 per-year external columns: `GEDI_Height_<year>`, `GEDI_Cover_<year>`,
-  `GEDI_AGB_<year>` (= GEDI L4B AGB), `Lang_Height_<year>`,
-  `Hansen_Cover_<year>`, `CCI_AGB_<year>`, one per year.
+  `GEDI_AGBD_<year>` (= GEDI L4B AGBD), `Lang_Height_<year>`,
+  `Hansen_Cover_<year>`, `CCI_AGBD_<year>`, one per year.
 - 40 per-year model columns: `PG-CBM_<Attribute>_<year>` and
-  `StruMPL_<Attribute>_<year>` for the 5 attributes (AGB, Height, Cover,
+  `StruMPL_<Attribute>_<year>` for the 5 attributes (AGBD, Height, Cover,
   Stem, WoodDensity) × 4 years.
 
 Total: **67 columns per row**. Values are float32; NaN where a source has no
@@ -1245,7 +1245,7 @@ script fails loudly with a "no .tif" error if it can't locate the file.
 A few principles that apply across the whole suite — worth keeping in mind when
 you write up results:
 
-1. **Accuracy vs agreement.** Only Height and Cover have ground truth. Every AGB,
+1. **Accuracy vs agreement.** Only Height and Cover have ground truth. Every AGBD,
    Stem, and Wood Density "metric" is agreement or plausibility. State this
    explicitly in any write-up; it's the most common over-claim in map validation.
 
@@ -1300,7 +1300,7 @@ you write up results:
 7. `12` residual-map similarity heatmaps — is the spatial error stable in time.
 8. `14` H↔C figure — does the model reproduce the GEDI-observed physical coupling.
 9. `05` Q-Q plots — confirm/quantify saturation in distribution terms.
-10. `04` source pairs (esp. AGB) — inter-product agreement where there's no truth.
+10. `04` source pairs (esp. AGBD) — inter-product agreement where there's no truth.
 11. `11` Δ-correlation timeline — does the model track REAL change.
 12. `08` allometric curves — internal physical consistency.
 13. `02`, `03` — supporting spatial-trend and internal-correlation evidence.

@@ -7,7 +7,7 @@ aggregator produces one pooled matrix per (attribute, year) — pixels from
 all sites concatenated within the same mask used by script 04:
 
     - GEDI-masked pixels if the attribute has a GEDI reference (Height, Cover)
-    - joint-valid across sources otherwise (AGB, Stem, WoodDensity)
+    - joint-valid across sources otherwise (AGBD, Stem, WoodDensity)
 
 Each cell's upper-triangle annotation carries two correlation numbers:
 
@@ -21,7 +21,7 @@ site independently. Both are useful; both should be reported in a paper.
 Sources per attribute (matches script 04):
     Height: PG-CBM, StruMPL, Lang, GEDI_RH98
     Cover:  PG-CBM, StruMPL, Hansen, GEDI_Cover
-    AGB:    PG-CBM, StruMPL, CCI, GEDI_L4B
+    AGBD:    PG-CBM, StruMPL, CCI, GEDI_L4B
     Stem:   PG-CBM, StruMPL
     WoodDensity: PG-CBM, StruMPL
 

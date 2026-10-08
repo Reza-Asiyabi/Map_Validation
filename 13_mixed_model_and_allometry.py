@@ -30,7 +30,7 @@ Two complementary temporal analyses:
 
   (B) Allometric stability across years.
 
-      For each (model, year, site), fit the same H+C+S -> AGB OLS as in
+      For each (model, year, site), fit the same H+C+S -> AGBD OLS as in
       script 08, then check whether the coefficients (a, b, c) are stable
       across years. A *physically consistent* model has coefficients that
       barely move year to year. We report the mean and within-site sd of
@@ -68,17 +68,17 @@ OUT.mkdir(parents=True, exist_ok=True)
 REF_TARGETS = {"Height": "GEDI_RH98", "Cover": "GEDI_Cover"}
 
 
-def _ols_h_c_s(H, C, S, AGB):
-    """OLS  AGB = a*H + b*C + c*S + d.  Returns dict {coef_H, coef_C, coef_S, intercept, R2, n}."""
-    ok = np.isfinite(H) & np.isfinite(C) & np.isfinite(S) & np.isfinite(AGB)
-    H, C, S, AGB = H[ok], C[ok], S[ok], AGB[ok]
+def _ols_h_c_s(H, C, S, AGBD):
+    """OLS  AGBD = a*H + b*C + c*S + d.  Returns dict {coef_H, coef_C, coef_S, intercept, R2, n}."""
+    ok = np.isfinite(H) & np.isfinite(C) & np.isfinite(S) & np.isfinite(AGBD)
+    H, C, S, AGBD = H[ok], C[ok], S[ok], AGBD[ok]
     if H.size < 30:
         return None
     X = np.column_stack([H, C, S, np.ones_like(H)])
-    coef, *_ = np.linalg.lstsq(X, AGB, rcond=None)
+    coef, *_ = np.linalg.lstsq(X, AGBD, rcond=None)
     pred = X @ coef
-    ss_res = float(np.sum((AGB - pred)**2))
-    ss_tot = float(np.sum((AGB - AGB.mean())**2))
+    ss_res = float(np.sum((AGBD - pred)**2))
+    ss_tot = float(np.sum((AGBD - AGBD.mean())**2))
     r2 = 1 - ss_res/ss_tot if ss_tot > 0 else np.nan
     return dict(coef_H=float(coef[0]), coef_C=float(coef[1]),
                 coef_S=float(coef[2]), intercept=float(coef[3]),
@@ -119,7 +119,7 @@ def main():
 
             # ---- Allometric OLS per (year, model) site ---------------------
             for model in MODELS:
-                keys = [f"{model}_{a}" for a in ["AGB","Height","Cover","Stem"]]
+                keys = [f"{model}_{a}" for a in ["AGBD","Height","Cover","Stem"]]
                 m = joint_valid_mask(b, keys)
                 if m.sum() < 200:
                     continue
@@ -127,7 +127,7 @@ def main():
                     b["arrays"][f"{model}_Height"][m],
                     b["arrays"][f"{model}_Cover"][m],
                     b["arrays"][f"{model}_Stem"][m],
-                    b["arrays"][f"{model}_AGB"][m],
+                    b["arrays"][f"{model}_AGBD"][m],
                 )
                 if fit is None: continue
                 allo_rows.append({

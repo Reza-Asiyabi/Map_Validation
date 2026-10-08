@@ -8,7 +8,7 @@ Pooled metrics can hide where a model fails. Two stratifications:
       mode where models plateau at the high end of the value range.
 
   (B) By cover class: bin pixels by GEDI Cover (or, where unavailable, by
-      Hansen Cover) into Sparse / Open / Closed forest. Useful for AGB
+      Hansen Cover) into Sparse / Open / Closed forest. Useful for AGBD
       especially: cover acts as a proxy for ecological zone when no
       ecoregion raster is supplied.
 
@@ -42,7 +42,7 @@ OUT.mkdir(parents=True, exist_ok=True)
 REF_BINS = {
     "Height": np.array([0, 3, 6, 9, 12, 15, 20, 30]),
     "Cover":  np.array([0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0]) * COVER_SCALE,
-    "AGB":    np.array([0, 10, 25, 50, 100, 200, 400]),
+    "AGBD":    np.array([0, 10, 25, 50, 100, 200, 400]),
 }
 
 COVER_CLASSES = {
@@ -78,7 +78,7 @@ def _cover_class_array(bundle):
 
 
 def main():
-    rb_rows = {a: [] for a in ["Height", "Cover", "AGB"]}
+    rb_rows = {a: [] for a in ["Height", "Cover", "AGBD"]}
     cc_rows = {a: [] for a in ATTRIBUTES}
 
     for site in SITES:
@@ -100,12 +100,12 @@ def main():
                     rb_rows[attr].append(
                         {"site": site, "source": src, **r})
 
-        # ---- (A') AGB: stratify by CCI bin since we have no truth ------------
-        if "CCI_AGB" in bundle["arrays"]:
-            cci = bundle["arrays"]["CCI_AGB"]
+        # ---- (A') AGBD: stratify by CCI bin since we have no truth ------------
+        if "CCI_AGBD" in bundle["arrays"]:
+            cci = bundle["arrays"]["CCI_AGBD"]
             m = np.isfinite(cci)
             ref = cci[m]
-            for src in [f"PG-CBM_AGB", f"StruMPL_AGB", "GEDI_L4B_AGB"]:
+            for src in [f"PG-CBM_AGBD", f"StruMPL_AGBD", "GEDI_L4B_AGBD"]:
                 if src not in bundle["arrays"]:
                     continue
                 pred = bundle["arrays"][src][m]
@@ -113,10 +113,10 @@ def main():
                 if ok.sum() < 30:
                     continue
                 for r in _stratify_by_refbin(pred[ok], ref[ok],
-                                             REF_BINS["AGB"]):
-                    rb_rows["AGB"].append(
+                                             REF_BINS["AGBD"]):
+                    rb_rows["AGBD"].append(
                         {"site": site, "source": src,
-                         "comparator": "CCI_AGB", **r})
+                         "comparator": "CCI_AGBD", **r})
 
         # ---- (B) By cover class -------------------------------------------------
         if cover_arr is None:
@@ -127,21 +127,21 @@ def main():
                 continue
             for attr in ATTRIBUTES:
                 ref_key = ATTRIBUTES[attr]["ref"]
-                # For Height/Cover use GEDI; for AGB use CCI; for Stem skip
+                # For Height/Cover use GEDI; for AGBD use CCI; for Stem skip
                 if ref_key is not None:
                     g_mask = gedi_mask(bundle, attr)
                     m = class_mask & g_mask
                     if m.sum() < 30:
                         continue
                     ref = bundle["arrays"][ref_key][m]
-                elif attr == "AGB":
-                    cci = bundle["arrays"].get("CCI_AGB")
+                elif attr == "AGBD":
+                    cci = bundle["arrays"].get("CCI_AGBD")
                     if cci is None: continue
                     m = class_mask & np.isfinite(cci)
                     if m.sum() < 30:
                         continue
                     ref = cci[m]
-                    ref_key = "CCI_AGB"
+                    ref_key = "CCI_AGBD"
                 else:
                     continue
                 for src in [f"PG-CBM_{attr}", f"StruMPL_{attr}",
@@ -165,7 +165,7 @@ def main():
                 OUT / f"stratified_by_cover_{attr}.csv", index=False)
 
     # ---- Saturation diagnostic plots: bias vs ref-bin centre, averaged across sites -----
-    for attr in ["Height", "Cover", "AGB"]:
+    for attr in ["Height", "Cover", "AGBD"]:
         rows = rb_rows[attr]
         if not rows:
             continue
