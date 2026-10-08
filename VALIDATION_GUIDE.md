@@ -6,18 +6,29 @@ most importantly — **how to read the outputs**. For each method you'll find:
 what it computes, the maths, what files it writes, and a "how to interpret"
 section describing what a good versus a problematic result looks like.
 
-The suite validates two models (**PG-CBM** and **StruMPL**) for five forest
-attributes — **AGBD** (above-ground biomass), **Height** (canopy height),
-**Cover** (canopy cover), **Stem Density**, and **Wood Density** — across 10
-African sites and 4 years (**2019–2022**), against GEDI ground truth and
-external reference products.
+The suite was written to validate two forest-structure mapping models:
+
+- **StruMPL** — <https://arxiv.org/abs/2605.19931>
+- **PG-CBM** — <https://arxiv.org/abs/2601.10562>
+
+for four forest attributes — **AGBD** (above-ground biomass density),
+**Height** (canopy height), **Cover** (canopy cover) and **Stem** (stem
+density) — across 10 African sites and 4 years (**2019–2022**), against GEDI
+reference data and external reference products. The code is generic enough to
+adapt to other models or sites (see [§4.5](#extending)), but names, folder
+layouts and defaults are set up for these two models.
+
+> **Naming note.** Above-ground biomass density is called `AGBD` everywhere in
+> the code and outputs. The *input* data is untouched: PG-CBM's biomass folder
+> on disk is still named `AGB`, and StruMPL's biomass files are matched by the
+> token `Biomass` — both are mapped to `AGBD` in `config.py`.
 
 ---
 
 ## Table of contents
 
 1. [Mental model: what "validation" means here](#mental-model)
-2. [The data you're feeding in](#the-data)
+2. [Setup & the data you're feeding in](#the-data)
 3. [Multi-year workflow and aggregation strategies](#multi-year)
 4. [Shared modules: config, io_utils, metrics](#shared-modules)
 5. [Script 01 — Quantitative metrics vs GEDI](#script-01)
@@ -35,8 +46,10 @@ external reference products.
 17. [Script 13 — Mixed-effects models & allometric stability](#script-13)
 18. [Script 14 — Height ↔ Cover allometry vs GEDI](#script-14)
 19. [Script 15 — Per-pixel wide CSV export](#script-15)
-20. [Cross-cutting cautions](#cautions)
-21. [Suggested reading order](#reading-order)
+20. [Aggregation scripts (`aggregate_*`)](#aggregators)
+21. [Cross-cutting cautions](#cautions)
+22. [Suggested reading order](#reading-order)
+23. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -44,7 +57,7 @@ external reference products.
 ## 1. Mental model: what "validation" means here
 
 It's worth being precise about what each comparison can actually tell you,
-because the five attributes sit at different rungs of evidential strength:
+because the four attributes sit at different rungs of evidential strength:
 
 | Attribute | Ground truth? | What a comparison establishes |
 |---|---|---|
@@ -52,7 +65,6 @@ because the five attributes sit at different rungs of evidential strength:
 | **Cover** | GEDI Cover (sparse) | **Accuracy** |
 | **AGBD** | None | **Agreement** — consistency with other products, not accuracy |
 | **Stem** | None, no external map | **Plausibility & internal consistency** only |
-| **Wood Density** | None, no external map | **Plausibility & internal consistency** only |
 
 This distinction runs through the whole suite. When you compare Height against
 GEDI you can say "PG-CBM has an RMSE of X metres." When you compare AGBD against
@@ -69,7 +81,27 @@ non-zero RMSE against GEDI is partly GEDI's own error, not solely your model's.
 ---
 
 <a name="the-data"></a>
-## 2. The data you're feeding in
+## 2. Setup & the data you're feeding in
+
+### 2.1 Requirements and quick start
+
+```
+pip install numpy pandas matplotlib rasterio scipy
+pip install statsmodels        # optional: only script 13's mixed models
+```
+
+1. Edit `config.py`: `ROOT_DIR`, `OUTPUT_DIR`, `SITES`, `MODELS`, `YEARS`,
+   `DEFAULT_YEAR`, and `COVER_UNITS` (see [§4.2](#cover-units)).
+2. Run the numbered scripts you need (`python 01_quantitative_metrics.py`, …).
+   Each is standalone and writes to `OUTPUT_DIR/<NN_name>/`. The only
+   dependencies between scripts are: **09 reads 01's output**, and the
+   `aggregate_01/02` scripts read per-year copies of 01/02's output.
+3. Optionally run the `aggregate_*` scripts ([§20](#aggregators)).
+
+The inputs are never modified. Everything is read through
+`io_utils.load_site_year`.
+
+### 2.2 Folder layout
 
 Per site, the loader expects this folder layout (configured in `config.py`):
 
@@ -80,15 +112,14 @@ Per site, the loader expects this folder layout (configured in `config.py`):
 │   │   ├── AGB/*.tif   (input folder name, unchanged)
 │   │   ├── Height/*.tif
 │   │   ├── Cover/*.tif
-│   │   ├── Stem/*.tif
-│   │   └── WoodDensity/*.tif
+│   │   └── Stem/*.tif
 │   ├── PG-CBM_055095_2020/  ...
 │   ├── PG-CBM_055095_2021/  ...
 │   └── PG-CBM_055095_2022/  ...
 ├── StruMPL_055095/
 │   ├── StruMPL_055095_2019/
 │   │   └── *_Biomass_*.tif, *_Height_*.tif, *_Cover_*.tif,
-│   │     *_StemDensity_*.tif, *_WoodDensity_*.tif  (flat layout, tokens in filename)
+│   │     *_StemDensity_*.tif  (flat layout, tokens in filename)
 │   ├── StruMPL_055095_2020/  ...
 │   ├── StruMPL_055095_2021/  ...
 │   └── StruMPL_055095_2022/  ...
@@ -100,7 +131,12 @@ Per site, the loader expects this folder layout (configured in `config.py`):
 ```
 
 The external stack has bands:  1=Lang_Height, 2=Hansen_Cover, 3=CCI_AGBD,
-4=GEDI_L4B_AGBD, 5=GEDI_Cover, 6=GEDI_RH98.
+4=GEDI_L4B_AGBD, 5=GEDI_Cover, 6=GEDI_RH98. (Names and band numbers are set in
+`EXT_BANDS` in `config.py`; the on-disk band order is what matters.)
+
+Units expected in the input rasters: Height in metres, **Cover as a fraction
+[0, 1]**, AGBD in Mg/ha, Stem in stems/ha. Nodata must be flagged in the
+GeoTIFF metadata (it becomes `NaN`).
 
 **Critical assumption: all maps within a site are already on a common grid**
 (same CRS, resolution, extent). The loader verifies this and raises an error if
@@ -134,10 +170,12 @@ now defaults to `DEFAULT_YEAR` (2020 by default), so calling `load_site(site)`
 returns that year's data. To get single-year outputs for a *different* year,
 change `DEFAULT_YEAR` in `config.py` and re-run. To get single-year outputs
 for *all* years, run each script four times, changing `DEFAULT_YEAR` each
-time, and write outputs to separate folders. This is the "repeat the
-single-year analysis per year" approach.
+time, and write outputs to separate folders (e.g. rename `01_quantitative_metrics`
+to `01_quantitative_metrics_2019`). This is the "repeat the single-year
+analysis per year" approach, and the `aggregate_01` / `aggregate_02` scripts
+([§20](#aggregators)) then combine the four folders for you.
 
-**B) Multi-year mode (scripts 10–14).** These scripts iterate over all
+**B) Multi-year mode (scripts 10–15).** These scripts iterate over all
 `YEARS` internally in a single run and produce cross-year aggregated
 outputs. They are the recommended way to answer temporal questions.
 
@@ -220,12 +258,16 @@ consequences:
 These four files are imported by the numbered scripts; they hold all the logic
 that would otherwise be duplicated.
 
-### `config.py` — single source of truth
+### 4.1 `config.py` — single source of truth
 
 Everything tunable lives here so you never edit a method script to change a
 path or a threshold. Key entries:
 
 - `ROOT_DIR`, `OUTPUT_DIR`, `SITES` — where data is and where results go.
+- `MODELS` — the models loaded by `io_utils` (default `["StruMPL"]`). **Many
+  scripts reference both `PG-CBM_*` and `StruMPL_*` keys, so set
+  `MODELS = ["PG-CBM", "StruMPL"]` to run the full suite** (see
+  [Troubleshooting](#troubleshooting)).
 - `YEARS` — list of years to include in multi-year analyses (default
   `[2019, 2020, 2021, 2022]`).
 - `DEFAULT_YEAR` — the year used by single-year scripts (01–09). Change this
@@ -234,13 +276,16 @@ path or a threshold. Key entries:
   contain `{year}` placeholders that are filled in at load time. PG-CBM uses
   `subfolder_per_attribute`; StruMPL uses `flat_with_filename_pattern` with
   `attr_tokens` mapping each attribute to a substring in the filename
-  (`AGBD→"Biomass"`, `Stem→"StemDensity"`, `WoodDensity→"WoodDensity"`, etc.).
+  (`AGBD→"Biomass"`, `Stem→"StemDensity"`, etc.). PG-CBM's `attr_subfolders`
+  maps `AGBD→"AGB"` because the biomass folder on disk is still called `AGB`.
   The token match is **case-sensitive** — if filenames vary in case across
   sites this is the first place to look when a file isn't found.
 - `EXTERNAL_PARENT_DIR = "External_Ref"`, `EXTERNAL_DIR = "External_Ref_{year}"`
   — per-year external reference sub-folder pattern.
 - `EXT_BANDS` — 1-based band indices in each year's external stack. GEDI Cover
   (band 5) and GEDI RH98 (band 6) live here alongside Lang/Hansen/CCI/L4B.
+- `COVER_UNITS`, `COVER_SCALE`, `COVER_UNIT_LABEL`, `COVER_KEYS` — canopy-cover
+  unit switch, see [§4.2](#cover-units).
 - `ATTRIBUTES` — per-attribute metadata: units, plotting range, the `ref`
   (ground-truth key, or `None`), and the list of `externals`. This dict is what
   tells every script which comparisons are even possible for a given attribute.
@@ -250,11 +295,48 @@ path or a threshold. Key entries:
   Scripts 03 and 04 now use density-coloured scatters that render all points,
   so this value is only a fallback for pathological cases.
 - `N_BOOTSTRAP = 1_000`, `RANDOM_SEED = 42` — reproducibility and CI resolution.
-- `PROFILE_N_BINS = 60`, `PROFILE_MIN_PIX_PER_BIN = 5` — profile binning. The
+- `PROFILE_N_BINS = 100`, `PROFILE_MIN_PIX_PER_BIN = 5` — profile binning. The
   fixed bin *count* (not degree width) adapts to each site's spatial extent
   regardless of size or CRS.
 
-### `io_utils.py` — loading a site
+<a name="cover-units"></a>
+### 4.2 Canopy-cover units: fraction or percent
+
+The input rasters store cover as a **fraction in [0, 1]** and are never
+changed. The setting `COVER_UNITS` in `config.py` decides how cover appears in
+everything the pipeline computes and writes (metrics, plots, CSVs, residual
+rasters):
+
+| `COVER_UNITS` | Cover range in outputs | Unit label |
+|---|---|---|
+| `"fraction"` | 0–1 (as stored) | `fraction` |
+| `"percent"` (default) | 0–100 | `%` |
+
+Mechanics:
+
+- **One conversion point.** `io_utils.load_site_year` multiplies every array
+  listed in `COVER_KEYS` (`GEDI_Cover`, `Hansen_Cover`, and `<model>_Cover`
+  for each model) by `COVER_SCALE` (1 or 100) right after reading. NaN is
+  preserved. Every script therefore sees cover in the chosen unit.
+- **Safety check.** If a cover array's maximum is above 1.5, `io_utils` emits
+  a warning: the file may already be in percent, and scaling it again would be
+  wrong.
+- **Config-driven bins and labels.** `ATTRIBUTES["Cover"]` takes its unit
+  label and `vmax` from the switch. Cover bins and classes in scripts 07, 08
+  and 14 are multiplied by `COVER_SCALE`, and script 14's axis labels use the
+  unit label.
+- **What changes numerically:** bias, MAE, RMSE (absolute cover errors),
+  binned cover values, cover axes, and the *raw* cover coefficient in the
+  AGBD regressions of scripts 08/13 (Mg/ha per **1 unit** of cover, so 100×
+  smaller per 1 % than per 1.0 fraction).
+- **What does not change:** `r`, `rho`, `R²`, `rRMSE`, KS-D, Moran's I,
+  standardised regression coefficients, and the AGBD contributions in Mg/ha.
+  These are handy sanity checks when switching the setting.
+- **Re-run everything after switching.** Scripts 09 and the `aggregate_*`
+  scripts read earlier outputs, so mixing results made under different
+  settings gives inconsistent units.
+
+### 4.3 `io_utils.py` — loading a site
 
 The core loader is `load_site_year(site, year)` which returns a "bundle" dict.
 `load_site(site)` is a backward-compatible wrapper that uses `DEFAULT_YEAR`, so
@@ -277,7 +359,7 @@ Bundle contents:
 Helper functions:
 
 - `gedi_mask(bundle, attribute)` — boolean array of pixels where the GEDI
-  reference for that attribute is finite; returns `None` for AGBD/Stem/WoodDensity
+  reference for that attribute is finite; returns `None` for AGBD/Stem
   (no GEDI reference). **This is the masking backbone**: it's how every
   GEDI-referenced comparison restricts itself to the sparse footprints.
 - `joint_valid_mask(bundle, keys)` — True only where *all* listed arrays are
@@ -287,7 +369,7 @@ Helper functions:
 - `density_scatter(ax, x, y, ...)` — density-coloured scatter that keeps every
   point (used by scripts 03, 04, 11).
 
-### `metrics.py` — the error/agreement formulas
+### 4.4 `metrics.py` — the error/agreement formulas
 
 `error_metrics(pred, ref)` drops any pair where either value is NaN, then
 computes (with `resid = pred − ref`):
@@ -313,7 +395,7 @@ Two subtleties you should keep in mind when reading R² in particular:
   tells you whether a problem is *scatter* (low r) or *systematic offset/scaling*
   (good r, poor R²).
 - **rRMSE divides by mean(ref)**, so it's only meaningful for strictly positive
-  quantities (all five here qualify) and becomes unstable when mean(ref) is near
+  quantities (all four here qualify) and becomes unstable when mean(ref) is near
   zero (very sparse/low-cover sites).
 
 `bootstrap_metrics(...)` resamples pixels with replacement to put confidence
@@ -322,6 +404,26 @@ spatially autocorrelated data (neighbouring pixels aren't independent), so an
 optional `block_size` enables a moving-block bootstrap as a coarse correction.
 Script 01 sidesteps this issue entirely by bootstrapping **across sites** rather
 than pixels (see below) — that's the statistically honest choice with 10 sites.
+
+<a name="extending"></a>
+### 4.5 Extending the suite
+
+- **Add a site:** append the folder name to `SITES`; it must follow the layout
+  in §2.2 and be on the same grid for all layers.
+- **Add a year:** add it to `YEARS` and make sure each model/external folder
+  exists for it. The multi-year scripts (e.g. 10, 13) skip a missing
+  site-year with a `[WARN]` message.
+- **Add a model:** add an entry to `MODEL_LAYOUT` (either layout style), add it
+  to `MODELS` and `COLOURS`. Several scripts hard-code the pair
+  `PG-CBM`/`StruMPL` in their source lists, so grep for `"PG-CBM_` when adding
+  a third model.
+- **Add an attribute (e.g. wood density):** add it to the model layouts and
+  to `ATTRIBUTES` (unit, range, `ref`, `externals`), then to the attribute
+  lists at the top of scripts 03, 15, `aggregate_03` (`ATTRS_ORDER`,
+  `ATTRIBUTES_TO_EXPORT`). Wood density is **not** configured by default.
+- **Different file naming:** adjust `attr_subfolders` / `attr_tokens` in
+  `MODEL_LAYOUT`. Token matching is case-sensitive and a missing/ambiguous
+  match raises an explicit error.
 
 ---
 
@@ -404,7 +506,7 @@ hugs GEDI's. For a chosen axis (longitude or latitude):
 
 1. Restrict to GEDI-valid pixels (the same mask for *every* source, so all
    curves average over an identical pixel set — this is essential for fairness).
-2. Bin the chosen coordinate into `PROFILE_N_BINS` = 60 fixed-count bins that
+2. Bin the chosen coordinate into `PROFILE_N_BINS` (default 100) fixed-count bins that
    span the site's spatial extent. Fixed bin *count* adapts to each site's
    size regardless of CRS — a fixed degree width would collapse UTM-projected
    sites to a couple of bins.
@@ -444,7 +546,7 @@ Two per-attribute summary figures visualise the aggregation:
   Height sources with cross-site SD as error bars.
 - `summary_Cover.png` — same layout for Cover sources.
 
-Split by attribute because Cover (fraction 0–1 or percent 0–100, per `COVER_UNITS`) and Height (metres, 0–25)
+Split by attribute because Cover (percent 0–100 or fraction 0–1, per `COVER_UNITS`) and Height (metres, 0–25)
 have very different dynamic ranges that would compress on a shared axis. The
 `lon`/`lat` distinction is encoded by hatching (solid = lon, hatched = lat)
 so source colour stays constant across both bars.
@@ -500,9 +602,8 @@ Correlations are computed on the **full** pixel set. The density-scatter
 helper handles millions of points via a 2-D histogram lookup, so no
 subsampling is needed for the plots either.
 
-Wood Density is not included in the 4-attribute pair matrix by default; if
-you want it included, change `ATTRS_ORDER` at the top of the script to a
-5-element list.
+The attribute list is `ATTRS_ORDER` at the top of the script; edit it if you
+add a further attribute.
 
 ### Outputs
 
@@ -549,6 +650,9 @@ plot across all available sources:
 - Cover: PG-CBM, StruMPL, Hansen, GEDI_Cover
 - AGBD: PG-CBM, StruMPL, CCI, GEDI_L4B
 - Stem: PG-CBM, StruMPL (no externals)
+
+(The source list per attribute comes from `ATTRIBUTES[attr]["externals"]` /
+`["ref"]` in `config.py`.)
 
 **Masking:** if a GEDI reference exists for the attribute, all sources are
 restricted to the GEDI mask (so every source is compared on the same support);
@@ -718,15 +822,15 @@ Two stratifications:
 **(A) By reference-value bin.** Split the reference into bins and compute
 metrics within each bin:
 - Height bins: `[0,3,6,9,12,15,20,30]` m
-- Cover bins: `[0,0.1,0.2,0.3,0.5,0.7,1.0]`
+- Cover bins: `[0,0.1,0.2,0.3,0.5,0.7,1.0]` × `COVER_SCALE` (i.e. `[0,10,20,30,50,70,100]` in percent mode)
 - AGBD bins (against CCI as comparator): `[0,10,25,50,100,200,400]` Mg/ha
 
 Bins with fewer than 30 pixels are skipped. This directly exposes **saturation**:
 if bias goes increasingly negative as the reference value rises, the model
 under-predicts tall/dense/high-biomass pixels.
 
-**(B) By cover class.** Bin pixels into Sparse (0–0.10), Open (0.10–0.40), and
-Closed (0.40+) forest using **Hansen Cover** (chosen over GEDI here because it's
+**(B) By cover class.** Bin pixels into Sparse (0–10 %), Open (10–40 %), and
+Closed (40 %+) forest (fractions 0–0.10, 0.10–0.40, 0.40+ in fraction mode) using **Hansen Cover** (chosen over GEDI here because it's
 a continuous wall-to-wall map, whereas GEDI is too sparse to populate classes).
 Then compute metrics for every attribute within each cover class. This is a
 proxy for ecological zone when you don't have an ecoregion raster — it answers
@@ -793,6 +897,12 @@ each model and site:
 3. **Model overlay.** Plot PG-CBM's and StruMPL's response curves on the same
    axes, per site and as a cross-site mean (interpolated onto a common predictor
    grid, mean ± sd across sites).
+
+**Units.** The AGBD predictors are in the units set by `COVER_UNITS` for Cover,
+metres for Height and stems/ha for Stem. Raw coefficients are per unit of the
+respective predictor; the CSV also carries standardised coefficients and the
+"range contribution" (Mg/ha across the observed predictor range), which are
+unit-independent and the right quantities to compare across settings.
 
 ### Outputs
 
@@ -898,6 +1008,12 @@ whether either model is degrading or improving over time.
   figures with 95% CIs.
 - `per_year_metrics.csv` — site × year × model × attribute metric table.
 - `trajectory_bootstrap_ci.csv` — per (year, model, attribute) mean + 95% CI.
+- `boxplots/temporal_<attr>.png` — 3-panel figure (bias, |bias|, RMSE) with year
+  on the x-axis and one box per model per year, showing the spread across
+  sites.
+- `boxplots/headline_<attr>.png` — 3-panel figure with one box per model,
+  pooling all site-year observations: the paper-ready "which model wins
+  overall" summary.
 
 ### How to interpret
 
@@ -1071,6 +1187,10 @@ learned different allometric relationships in different years.
   across years.
 - `allometric_stability.png` — bar chart of coefficient stability.
 
+**Dependency:** the mixed models need `statsmodels`. If it is not installed the
+script prints a message, skips part (A), and still runs the allometric
+stability part (B).
+
 ### How to interpret
 
 - **Mixed model p-values are the formal statement.** For `model * year`:
@@ -1132,7 +1252,12 @@ year). The physical H↔C relationship doesn't change year-to-year; pooling
 just gives a denser, cleaner reference curve, and naturally handles sites
 where GEDI is missing in some years (e.g. Niger in 2019 in your data).
 
+**Units.** Cover bins (20 equal bins from 0 to `COVER_SCALE`) and axis labels
+follow `COVER_UNITS`.
+
 ### Outputs
+
+All under `OUTPUT_DIR/14_height_cover_allometry_new/`:
 
 - `gedi_masked/<site>_HC_gedi.png` — 2-panel headline figure per site.
 - `wallcheck/<site>_HC_wallcheck.png` — 4-panel supplementary check.
@@ -1186,14 +1311,15 @@ Each row is one pixel within a site. Columns cover every year × source
 combination:
 
 - `site_id`, `row`, `col` (integer pixel coordinates)
-- 24 per-year external columns: `GEDI_Height_<year>`, `GEDI_Cover_<year>`,
+- 24 per-year external/GEDI columns (6 sources × 4 years): `GEDI_Height_<year>`, `GEDI_Cover_<year>`,
   `GEDI_AGBD_<year>` (= GEDI L4B AGBD), `Lang_Height_<year>`,
   `Hansen_Cover_<year>`, `CCI_AGBD_<year>`, one per year.
-- 40 per-year model columns: `PG-CBM_<Attribute>_<year>` and
-  `StruMPL_<Attribute>_<year>` for the 5 attributes (AGBD, Height, Cover,
-  Stem, WoodDensity) × 4 years.
+- 32 per-year model columns: `PG-CBM_<Attribute>_<year>` and
+  `StruMPL_<Attribute>_<year>` for the 4 attributes (AGBD, Height, Cover,
+  Stem) × 4 years.
 
-Total: **67 columns per row**. Values are float32; NaN where a source has no
+Total: **59 columns per row** (3 + 24 + 32). Cover columns are in the unit set
+by `COVER_UNITS`. Values are float32; NaN where a source has no
 observation at that pixel/year.
 
 **Pixel filtering.** Drop rows where GEDI Height AND GEDI Cover are NaN in
@@ -1228,25 +1354,86 @@ analysis you want to do outside the pipeline. Typical uses:
 For a paper, `.csv.gz` is a compact and reader-friendly way to publish the
 per-pixel data as supplementary material.
 
-### Notes on filename conventions
+### Notes on attributes
 
-The script reads WoodDensity from PG-CBM subfolder `WoodDensity/` and from
-StruMPL filenames containing the substring `WoodDensity`. If your actual
-filenames use a different token, edit the two entries in
-`MODEL_LAYOUT["PG-CBM"]["attr_subfolders"]["WoodDensity"]` and
-`MODEL_LAYOUT["StruMPL"]["attr_tokens"]["WoodDensity"]` in `config.py`. The
-script fails loudly with a "no .tif" error if it can't locate the file.
+The exported attributes are listed in `ATTRIBUTES_TO_EXPORT` at the top of the
+script. The script fails loudly with a "no .tif" error if a layer cannot be
+located; fix the file-name token or sub-folder in `MODEL_LAYOUT` in
+`config.py`.
+
+---
+
+<a name="aggregators"></a>
+## 20. Aggregation scripts (`aggregate_*`)
+
+The aggregators combine the single-year results into cross-year, cross-site
+deliverables. Two of them read the per-year output folders of scripts 01/02;
+the other three load the rasters directly. All use sites as the unit of
+replication (see §3.3).
+
+| Script | Reads | Writes (under `OUTPUT_DIR/…`) |
+|---|---|---|
+| `aggregate_01_multi_year.py` | four per-year copies of script 01's output (`INPUT_DIRS`) | `01_aggregate_multi_year/`: `aggregated_metrics.csv`, `summary_<attr>_multi_year.png` |
+| `aggregate_02_multi_year.py` | four per-year copies of script 02's output (`INPUT_DIRS`) | `02_aggregate_multi_year/`: `aggregated_metrics.csv`, `summary_grand.csv`, `summary_<attr>.png`, `temporal_profiles/` |
+| `aggregate_03_multi_year.py` | rasters (via `load_site_year`) | `03_aggregate_multi_year/`: `<year>_<model>_pooled_pairs.png`, `pooled_correlations.csv` |
+| `aggregate_04_multi_year.py` | rasters | `04_aggregate_multi_year/`: `<year>_<attr>_pooled_source_pairs.png`, `pooled_source_correlations.csv` |
+| `aggregate_04_agbd_agreement.py` | rasters | `04_agbd_agreement/`: `per_cell_metrics.csv`, `site_mean_agbd.csv`, `agreement_summary.csv` |
+
+### `aggregate_01` and `aggregate_02` — per-year folders required
+
+Both expect one output folder per year. Produce them by running script 01
+(or 02) once per year with `DEFAULT_YEAR` set accordingly and renaming the
+output folder to match `INPUT_DIRS` (default patterns
+`01_quantitative_metrics_<year>` and `02_profiles_<year>`). Edit
+`INPUT_DIRS` if you name them differently.
+
+- **aggregate_01** produces cross-site bootstrap CIs per (attribute, source,
+  year). The figure ("Option B" layout) draws StruMPL and PG-CBM as
+  year-on-x bars and Lang/Hansen as horizontal reference lines with a shaded
+  CI band, because those products are fixed single-year references
+  (`SINGLE_YEAR_SOURCES`, canonical year 2020) — drawing them as bars would
+  falsely imply they changed.
+- **aggregate_02** produces the cross-site × cross-year profile-metric
+  summary (`aggregated_metrics.csv`, and `summary_grand.csv` collapsed over
+  all sites/years) and bar charts of bias, |bias| and RMSE per attribute with
+  year on the x-axis and lon/lat distinguished by hatching (multi-year models
+  only). It also draws, per site, overlays of four years of GEDI and model
+  profiles to show whether the model's profile shape drifts more than GEDI's
+  sampling variability.
+
+### `aggregate_03` and `aggregate_04_multi_year` — pooled pair plots
+
+Pool all sites' pixels into one pair matrix per (model, year) (`03`) or per
+(attribute, year) (`04`). Each cell reports two numbers: **pooled r** (one
+correlation over all pixels) and **per-site r** (mean ± SD of the within-site
+correlations). Pooled r mixes within- and between-site variation
+(Simpson's paradox); per-site r is the honest consistency number, the pooled
+scatter is the visual. Pooled data is capped at `POOLED_SUBSAMPLE_CAP`
+pixels.
+
+### `aggregate_04_agbd_agreement` — AGBD agreement table
+
+For each of the 10 sites × 4 years and each comparator (CCI, GEDI L4B,
+PG-CBM) it computes Pearson r and RMSE between StruMPL AGBD and the
+comparator on jointly valid pixels (cells with fewer than
+`MIN_PIXELS_PER_CELL` = 500 joint pixels give NaN metrics), then summarises mean ± SD
+over cells in `agreement_summary.csv` — the numbers for a paper table. It
+also writes site-mean AGBD per site-year (for a high/low-biomass split) and
+a per-cell disagreement table.
+
+**Read this as agreement, not accuracy**: none of the comparators is a
+per-pixel ground reference.
 
 ---
 
 <a name="cautions"></a>
-## 20. Cross-cutting cautions
+## 21. Cross-cutting cautions
 
 A few principles that apply across the whole suite — worth keeping in mind when
 you write up results:
 
-1. **Accuracy vs agreement.** Only Height and Cover have ground truth. Every AGBD,
-   Stem, and Wood Density "metric" is agreement or plausibility. State this
+1. **Accuracy vs agreement.** Only Height and Cover have ground truth. Every AGBD
+   and Stem "metric" is agreement or plausibility. State this
    explicitly in any write-up; it's the most common over-claim in map validation.
 
 2. **GEDI is a noisy reference.** Part of every Height/Cover RMSE is GEDI's own
@@ -1283,12 +1470,17 @@ you write up results:
    claims the model tracks change, run script 11 explicitly and report those
    numbers — don't rely on static-year metrics.
 
-9. **WoodDensity has no external reference at all.** Every WoodDensity number in
-   the outputs is model-internal. Do not compare WoodDensity to GEDI or CCI
-   because there is nothing to compare to. Use it for internal-consistency
-   checks (script 08, 13) only.
+9. **Units matter when comparing runs.** Cover metrics differ by exactly 100×
+   between `COVER_UNITS = "fraction"` and `"percent"`. Never mix outputs from
+   runs with different settings (especially when using `09` and `aggregate_*`).
 
-### Suggested reading order for results
+10. **Reference products are not interchangeable.** Lang and Hansen are fixed
+    single-year products compared against year-varying GEDI samples; treat
+    year-to-year differences in their scores as sampling noise, not product
+    behaviour (hence the horizontal-line layout in `aggregate_01`).
+
+<a name="reading-order"></a>
+## 22. Suggested reading order for results
 
 1. `09_summary/overview.txt` — the headline single-year numbers and model verdict.
 2. `01` bar charts — accuracy + CIs for Height/Cover in a representative year.
@@ -1305,3 +1497,21 @@ you write up results:
 12. `08` allometric curves — internal physical consistency.
 13. `02`, `03` — supporting spatial-trend and internal-correlation evidence.
 14. `15` per-pixel CSV — the substrate for any custom downstream analysis.
+15. `aggregate_*` outputs — the paper-ready cross-year tables and pooled figures.
+
+---
+
+<a name="troubleshooting"></a>
+## 23. Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| `KeyError: 'PG-CBM_Height'` (or similar) | `MODELS` in `config.py` lacks `PG-CBM`. Scripts reference both models; use `MODELS = ["PG-CBM", "StruMPL"]`. |
+| `FileNotFoundError: No .tif found in …` / `No .tif containing '<token>'` | Wrong folder/token in `MODEL_LAYOUT`, or case mismatch (matching is case-sensitive). |
+| `RuntimeError: Expected exactly one .tif …` | A PG-CBM attribute sub-folder holds several tifs; keep exactly one per folder. |
+| `Shape mismatch for …` | Layers within a site are not on a common grid. Resample outside this suite; the loader never reprojects. |
+| Warning: `max=… > 1.5, but cover is expected as a fraction` | Cover input looks like percent already. Check the data before trusting cover results; `COVER_UNITS` assumes fractions on disk. |
+| Script 09 says to run script 01 first | 09 reads `01_quantitative_metrics/per_site_metrics.csv`. |
+| `aggregate_01/02` find no input | `INPUT_DIRS` folders do not exist; create per-year copies of the 01/02 outputs (§20). |
+| Script 13 skips mixed models | `statsmodels` not installed (`pip install statsmodels`). |
+| Cover numbers 100× different from an earlier run | `COVER_UNITS` changed between runs (§4.2). |
