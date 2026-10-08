@@ -16,7 +16,7 @@ For each model, we:
   3. Compare PG-CBM vs StruMPL allometric curves on the same axes.
 
 Coefficient scaling: because the three predictors have very different
-native ranges (Height ~ 0-25 m, Cover ~ 0-1, Stem ~ 0-1000 stems/ha),
+native ranges (Height ~ 0-25 m, Cover ~ 0-1 or 0-100 per COVER_UNITS, Stem ~ 0-1000 stems/ha),
 raw regression coefficients are on incommensurable scales and cannot be
 compared directly ("which predictor matters most?" is unanswerable from
 the raw values). We therefore fit the OLS on GLOBALLY z-scored predictors:
@@ -51,7 +51,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import SITES, MODELS, ATTRIBUTES, OUTPUT_DIR, COLOURS
+from config import SITES, MODELS, ATTRIBUTES, OUTPUT_DIR, COLOURS, COVER_SCALE
 from io_utils import load_site, joint_valid_mask
 
 
@@ -63,7 +63,7 @@ DETAIL_DIR.mkdir(exist_ok=True)
 
 PREDICTORS = {
     "Height": np.linspace(0, 25, 26),
-    "Cover":  np.linspace(0, 1, 21),
+    "Cover":  np.linspace(0, 1 * COVER_SCALE, 21),
     "Stem":   np.linspace(0, 1000, 21),
 }
 

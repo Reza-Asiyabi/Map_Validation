@@ -444,7 +444,7 @@ Two per-attribute summary figures visualise the aggregation:
   Height sources with cross-site SD as error bars.
 - `summary_Cover.png` — same layout for Cover sources.
 
-Split by attribute because Cover (fractional, 0–1) and Height (metres, 0–25)
+Split by attribute because Cover (fraction 0–1 or percent 0–100, per `COVER_UNITS`) and Height (metres, 0–25)
 have very different dynamic ranges that would compress on a shared axis. The
 `lon`/`lat` distinction is encoded by hatching (solid = lon, hatched = lat)
 so source colour stays constant across both bars.

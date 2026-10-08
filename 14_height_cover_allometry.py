@@ -55,7 +55,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import SITES, YEARS, MODELS, ATTRIBUTES, OUTPUT_DIR, COLOURS
+from config import (SITES, YEARS, MODELS, ATTRIBUTES, OUTPUT_DIR, COLOURS,
+                    COVER_SCALE, COVER_UNIT_LABEL)
 from io_utils import load_site_year, gedi_mask
 
 
@@ -80,9 +81,9 @@ MODELS_TO_PLOT = ["StruMPL", "PG-CBM"]
 
 # Bin edges for the two directions of the H↔C curve
 # Height: 0 to 25 m (covers African dryland forest range) in 1-m bins
-# Cover:  0 to 1 in 0.05 bins
+# Cover:  0 to 1 (fraction) or 0 to 100 (percent) in 20 equal bins
 HEIGHT_BINS = np.linspace(0, 25, 26)
-COVER_BINS  = np.linspace(0, 1, 21)
+COVER_BINS  = np.linspace(0, 1 * COVER_SCALE, 21)
 
 MIN_PIX_PER_BIN = 15        # bin retention floor; lower than script 08 because
                             # GEDI-masked pixels are sparse
@@ -159,9 +160,9 @@ def _plot_headline_figure(site, curves, scalars, out_path):
     """
     fig, axes = plt.subplots(1, 2, figsize=(13.5, 4.8))
     direction_specs = [
-        ("C_vs_H", axes[0], "Height [m]", "Cover [fraction]",
+        ("C_vs_H", axes[0], "Height [m]", f"Cover [{COVER_UNIT_LABEL}]",
          "Cover as a function of Height (GEDI-masked)"),
-        ("H_vs_C", axes[1], "Cover [fraction]", "Height [m]",
+        ("H_vs_C", axes[1], f"Cover [{COVER_UNIT_LABEL}]", "Height [m]",
          "Height as a function of Cover (GEDI-masked)"),
     ]
     for direction, ax, xlabel, ylabel, title in direction_specs:
@@ -221,8 +222,8 @@ def _plot_wallcheck_figure(site, curves_gedi, curves_wall, out_path):
     fig, axes = plt.subplots(nrows, ncols, figsize=(13, 4.5*nrows),
                              squeeze=False)
     direction_specs = [
-        ("C_vs_H", 0, "Height [m]", "Cover [fraction]"),
-        ("H_vs_C", 1, "Cover [fraction]", "Height [m]"),
+        ("C_vs_H", 0, "Height [m]", f"Cover [{COVER_UNIT_LABEL}]"),
+        ("H_vs_C", 1, f"Cover [{COVER_UNIT_LABEL}]", "Height [m]"),
     ]
     for ri, model in enumerate(models_here):
         base = COLOURS.get(model, "#444")
@@ -495,8 +496,8 @@ def main():
     # per-site figures) — it measures site-to-site variation in the mean
     # curve, which is the honest cross-site uncertainty band.
     for direction, edges, xlabel, ylabel in [
-        ("C_vs_H", HEIGHT_BINS, "Height [m]",        "Cover [fraction]"),
-        ("H_vs_C", COVER_BINS,  "Cover [fraction]",  "Height [m]"),
+        ("C_vs_H", HEIGHT_BINS, "Height [m]",        f"Cover [{COVER_UNIT_LABEL}]"),
+        ("H_vs_C", COVER_BINS,  f"Cover [{COVER_UNIT_LABEL}]",  "Height [m]"),
     ]:
         fig, ax = plt.subplots(figsize=(7.5, 4.8))
 

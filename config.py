@@ -109,6 +109,29 @@ EXT_BANDS = {           # 1-based band indices within the per-year External tif
 }
 
 # -----------------------------------------------------------------------------
+# Canopy-cover units
+# -----------------------------------------------------------------------------
+# The input rasters store cover as a FRACTION in [0, 1] and are never modified.
+# COVER_UNITS controls how cover is represented in everything the pipelines
+# compute and write (metrics, plots, CSVs, residual rasters):
+#     "fraction"  -> [0, 1]    (cover arrays used exactly as stored)
+#     "percent"   -> [0, 100]  (cover arrays multiplied by 100 at load time)
+# The scaling itself is applied once in io_utils.load_site_year, to every array
+# named in COVER_KEYS. Re-run the whole pipeline after changing this setting:
+# scripts 09 and the aggregate_* scripts read earlier outputs, so mixing
+# results from different settings would give inconsistent units.
+COVER_UNITS = "percent"          # "fraction" or "percent"
+
+if COVER_UNITS not in ("fraction", "percent"):
+    raise ValueError(f"COVER_UNITS must be 'fraction' or 'percent', got {COVER_UNITS!r}")
+
+COVER_SCALE = 100.0 if COVER_UNITS == "percent" else 1.0
+COVER_UNIT_LABEL = "%" if COVER_UNITS == "percent" else "fraction"
+
+# Bundle array keys that hold canopy cover (scaled by COVER_SCALE on load).
+COVER_KEYS = ["GEDI_Cover", "Hansen_Cover"] + [f"{m}_Cover" for m in MODEL_LAYOUT]
+
+# -----------------------------------------------------------------------------
 # Attribute metadata
 # -----------------------------------------------------------------------------
 ATTRIBUTES = {
@@ -120,9 +143,9 @@ ATTRIBUTES = {
         "externals": ["Lang_Height"],
     },
     "Cover": {
-        "unit":      "fraction",
+        "unit":      COVER_UNIT_LABEL,   # "%" or "fraction" (see COVER_UNITS)
         "vmin":      0,
-        "vmax":      1,
+        "vmax":      1 * COVER_SCALE,
         "ref":       "GEDI_Cover",
         "externals": ["Hansen_Cover"],
     },
