@@ -1,109 +1,87 @@
-# Forest attribute map validation (PG-CBM & StruMPL)
+# Forest structure map validation
 
-Python scripts to validate two model outputs (PG-CBM, StruMPL) for four forest
-attributes (AGBD, Height, Cover, Stem Density) across 10 African sites,
-against GEDI ground truth and external reference products (Lang Height,
-Hansen Cover, CCI AGBD, GEDI L4B AGBD).
+Validation pipelines for forest-structure maps from two models:
+
+- **StruMPL** — <https://arxiv.org/abs/2605.19931>
+- **PG-CBM** — <https://arxiv.org/abs/2601.10562>
+
+The suite checks four attributes (**AGBD**, **Height**, **Cover**, **Stem**
+density) over 10 African sites and four years (2019–2022). Height and Cover
+are validated against GEDI (RH98 and canopy cover). AGBD is compared with
+external products (CCI, GEDI L4B), which gives agreement rather than accuracy.
+Stem density is checked for consistency only. Each script reads GeoTIFFs,
+computes metrics, and writes figures and CSVs. The inputs are never modified.
+
+The code is written for these two models. Other models or sites need config
+edits (see the guide).
 
 ## Quick start
 
-1. **Edit `config.py`** — set `ROOT_DIR`, `OUTPUT_DIR`, and the list of `SITES`.
-2. **Install deps**:
-   ```
-   pip install numpy pandas matplotlib rasterio scipy
-   ```
-3. **Run scripts in numbered order** (they can run independently, but `09`
-   reads `01`'s output):
-   ```
-   python 01_quantitative_metrics.py
-   python 02_longitude_profiles.py
-   python 03_attribute_pairs.py
-   python 04_source_pairs.py
-   python 05_distributions.py
-   python 06_spatial_residuals.py
-   python 07_stratified_metrics.py
-   python 08_allometric_consistency.py
-   python 09_summary_tables.py
-   ```
-
-Each script writes to `OUTPUT_DIR/<NN_method_name>/`.
-
-## What each script does
-
-| # | Script | Question it answers |
-|---|---|---|
-| 01 | quantitative_metrics | Per-site & pooled bias/MAE/RMSE/rRMSE/R²/r vs GEDI for Height & Cover, with cross-site bootstrap CIs |
-| 02 | longitude_profiles | Does each model's spatial mean track GEDI's along lon and lat (the GEE profile workflow, in Python)? |
-| 03 | attribute_pairs | Within each model, do the four attributes correlate sensibly (the ggpairs equivalent)? |
-| 04 | source_pairs | For each attribute, how do PG-CBM / StruMPL / external sources compare pixel-by-pixel? |
-| 05 | distributions | Are the value distributions consistent? Q-Q plots reveal saturation; KS gives a number |
-| 06 | spatial_residuals | Are residuals spatially clustered? (Moran's I) — and what do the residual maps look like? |
-| 07 | stratified_metrics | Where does each model fail? RMSE/bias binned by reference value (saturation diagnostic) and cover class |
-| 08 | allometric_consistency | Is each model internally consistent? AGBD vs H/C/S response curves + OLS fits |
-| 09 | summary_tables | Compact tables for paper / head-to-head PG-CBM vs StruMPL with paired Wilcoxon |
-
-## Outputs
-
+```bash
+pip install numpy pandas matplotlib rasterio scipy
+pip install statsmodels     # optional, only for the mixed models in script 13
 ```
-OUTPUT_DIR/
-├── 01_quantitative_metrics/
-│   ├── per_site_metrics.csv
-│   ├── pooled_metrics.csv
-│   ├── site_bootstrap_ci.csv
-│   └── summary_Height.png, summary_Cover.png
-├── 02_profiles/
-│   ├── <site>_<attr>_lon.png, _lat.png
-│   ├── <site>_<attr>_<axis>_profile.csv
-│   └── profile_summary_metrics.csv
-├── 03_attribute_pairs/
-│   ├── <site>_<model>_pairs.png
-│   └── all_sites_<model>_corr_summary.csv
-├── 04_source_pairs/...
-├── 05_distributions/
-│   ├── <site>_<attr>_hist_qq.png
-│   └── ks_test_results.csv
-├── 06_spatial_residuals/
-│   ├── <site>_<attr>_<model>_residual.tif & .png
-│   └── morans_i.csv
-├── 07_stratified/
-│   ├── stratified_by_refbin_<attr>.csv
-│   ├── stratified_by_cover_<attr>.csv
-│   └── saturation_<attr>.png
-├── 08_allometric/
-│   ├── allometric_curves_<predictor>.png
-│   ├── allometric_ols_per_site.csv
-│   └── allometric_curves_per_site/<site>.png
-└── 09_summary/
-    ├── summary_<attr>.csv
-    ├── model_comparison.csv
-    └── overview.txt
-```
+
+1. Edit `config.py`: `ROOT_DIR`, `OUTPUT_DIR`, `SITES`, `YEARS`, `DEFAULT_YEAR`.
+   Set `MODELS = ["PG-CBM", "StruMPL"]` to run the full suite.
+2. Run any script: `python 01_quantitative_metrics.py`. Each writes to
+   `OUTPUT_DIR/<NN_name>/`. Script 09 needs the output of 01.
+
+Expected layout, per site:
+`PG-CBM_055095/PG-CBM_055095_<year>/<attr>/*.tif`,
+`StruMPL_055095/StruMPL_055095_<year>/*<token>*.tif`, and
+`External_Ref/External_Ref_<year>/*.tif` (6 bands: Lang height, Hansen cover,
+CCI AGBD, GEDI L4B AGBD, GEDI cover, GEDI RH98). All layers of a site must
+already share one grid. Nothing is reprojected or resampled.
+
+## Switches in `config.py`
+
+- **`COVER_UNITS`** is `"percent"` (default, cover 0–100) or `"fraction"`
+  (0–1). The input rasters hold fractions; cover is converted once, when it is
+  loaded. Re-run the whole pipeline after changing it.
+- **`DEFAULT_YEAR`** is the year used by single-year scripts 01–09.
+- **`MODELS`**, **`YEARS`** and **`SITES`** control which models, years and
+  sites are processed.
+
+## Scripts
+
+| Script | Purpose |
+|---|---|
+| `01_quantitative_metrics` | Bias, MAE, RMSE, rRMSE, R², r vs GEDI (Height, Cover), with cross-site bootstrap CIs |
+| `02_longitude_profiles` | Longitude and latitude profiles of each model vs GEDI |
+| `03_attribute_pairs` | Pair plots of the attributes within each model |
+| `04_source_pairs` | Pair plots of the sources (models, externals, GEDI) for each attribute |
+| `05_distributions` | CDFs, Q-Q plots and KS tests (saturation check) |
+| `06_spatial_residuals` | Residual maps and rasters, Moran's I |
+| `07_stratified_metrics` | Errors by reference-value bin and by cover class |
+| `08_allometric_consistency` | AGBD response to Height, Cover and Stem, with OLS fits |
+| `09_summary_tables` | Summary tables and a paired Wilcoxon model comparison |
+| `10_temporal_residual_profiles` | Residual profiles and RMSE/bias trajectories by year |
+| `11_year_over_year_change_agreement` | Does Δmodel track ΔGEDI? |
+| `12_temporal_consistency_spatial` | Per-year Moran's I, residual-map similarity, z-anomaly maps |
+| `13_mixed_model_and_allometry` | Mixed models (`model*year + (1\|site)`), allometric stability |
+| `14_height_cover_allometry` | Height–Cover coupling, model vs GEDI |
+| `15_export_per_pixel_csv` | Wide per-pixel CSV per site (`--site`, `--gzip`) |
+| `aggregate_01…04_*` | Cross-year tables and pooled figures (see the guide) |
+
+Shared code: `config.py` (all settings), `io_utils.py` (loading, masks,
+cover scaling), `metrics.py` (error metrics, bootstrap).
 
 ## Design notes
 
-- **Cover units are switchable.** Input rasters hold canopy cover as a fraction
-  [0, 1] and are never modified. `COVER_UNITS` in `config.py` (`"fraction"` or
-  `"percent"`) controls how cover appears in every output (metrics, plots,
-  CSVs, residual rasters). Scaling is applied once in `io_utils.load_site_year`;
-  cover bins/classes in scripts 07, 08 and 14 follow `COVER_SCALE`. Unit-free
-  metrics (r, R², rRMSE) are unaffected. Re-run the full pipeline after
-  changing it, since scripts 09 and `aggregate_*` read earlier outputs.
+- **Sites are the unit of replication.** Bootstrap CIs resample sites, not
+  pixels, because pixels are spatially autocorrelated.
+- **GEDI is a sparse raster** on the same pixel grid as the maps, handled as a
+  validity mask.
+- **AGBD and Stem have no ground truth.** Treat their metrics as agreement or
+  plausibility, not accuracy.
+- **Naming:** biomass density is `AGBD` in all code and outputs. The PG-CBM
+  input folder on disk is still `AGB`, and the StruMPL files are matched by
+  `Biomass`. Both are mapped in `config.py`.
 
-- **No reprojection or resampling.** All maps per site are assumed already on
-  a common grid. The I/O layer asserts shape equality and fails loudly otherwise.
-- **GEDI pixels not footprints.** The user confirmed GEDI footprints are already
-  rasterised onto the maps' pixel grid, so GEDI is treated like any other raster
-  with a sparse valid mask. The mask is recomputed per attribute (`gedi_mask`).
-- **Bootstrap CIs are across sites**, not across pixels. Pixel-level bootstrap
-  ignores spatial autocorrelation and dramatically understates uncertainty.
-  With 10 sites you get usable but wide CIs — that's an honest picture.
-- **For AGBD**, no ground truth exists. Metrics against CCI / GEDI L4B should be
-  read as *inter-product agreement*, not error. The summary tables label these
-  appropriately.
-- **For Stem density**, no external reference. Validation relies on
-  distribution shape, attribute pairs (script 03), allometric consistency
-  (script 08), and PG-CBM ↔ StruMPL agreement (script 04).
-- **Ecoregion stratification** is not implemented because you don't have
-  ecoregion rasters in the site folders. If you add them later (RESOLVE
-  Ecoregions, same as the GEE app), `07_stratified_metrics.py` is the right
-  place to wire them in.
+## Documentation
+
+[`VALIDATION_GUIDE.md`](VALIDATION_GUIDE.md) is the full reference. It covers
+every script's logic and formulas, the output files, how to interpret each
+result, the multi-year aggregation strategy, cover units, how to extend the
+suite, and troubleshooting.
